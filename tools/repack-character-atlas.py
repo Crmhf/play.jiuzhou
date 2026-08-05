@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Normalize the generated 禾灵 atlas into a clean 4x3 sprite sheet.
+"""Normalize an AI-generated 节气行者 atlas into a clean 4x3 sprite sheet.
 
 MiniMax and gpt-image-2 both occasionally add padding or extra rows to
 generated sprite sheets. This tool crops every frame by its content bounding
@@ -7,10 +7,11 @@ box, rescales it to a uniform cell, and repacks the 12 frames into an exact
 4x3 grid that the runtime shader expects.
 
 Usage:
-    python3 tools/repack-heling-atlas.py [source.webp]
+    python3 tools/repack-character-atlas.py [source.webp] [outputId]
 
-The source defaults to .gen/raw-heling-atlas/atlas.webp and the result is
-written to public/assets/characters/heling/atlas.webp.
+The source defaults to .gen/raw-character-atlas/<outputId>/atlas.webp (or the
+legacy .gen/raw-heling-atlas/atlas.webp for heling) and the result is written
+to public/assets/characters/<outputId>/atlas.webp.
 """
 
 import json
@@ -25,8 +26,14 @@ except ImportError:
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / ".gen" / "raw-heling-atlas" / "atlas.webp"
-OUT_DIR = ROOT / "public" / "assets" / "characters" / "heling"
+OUTPUT_ID = sys.argv[2] if len(sys.argv) > 2 else "heling"
+if len(sys.argv) > 1:
+    SOURCE = pathlib.Path(sys.argv[1]).resolve()
+elif OUTPUT_ID == "heling":
+    SOURCE = ROOT / ".gen" / "raw-heling-atlas" / "atlas.webp"
+else:
+    SOURCE = ROOT / ".gen" / "raw-character-atlas" / OUTPUT_ID / "atlas.webp"
+OUT_DIR = ROOT / "public" / "assets" / "characters" / OUTPUT_ID
 COLS, ROWS = 4, 3
 CELL = 256
 GREEN = (0, 255, 0)
@@ -118,13 +125,13 @@ def main():
     if result.returncode != 0:
         raise SystemExit(f"cwebp failed: {result.stderr}")
 
-    manifest = {"version": 1, "id": "heling", "cols": COLS, "rows": ROWS, "artFacing": 1, "fps": 10}
+    manifest = {"version": 1, "id": OUTPUT_ID, "cols": COLS, "rows": ROWS, "artFacing": 1, "fps": 10}
     (OUT_DIR / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     summary_dir = ROOT / ".gen"
     summary_dir.mkdir(exist_ok=True)
-    (summary_dir / "atlas-heling-repacked.json").write_text(
+    (summary_dir / f"atlas-{OUTPUT_ID}-repacked.json").write_text(
         json.dumps(
-            {"generatedAt": "", "source": str(SOURCE.relative_to(ROOT)), "output": "assets/characters/heling/atlas.webp", "cols": COLS, "rows": ROWS},
+            {"generatedAt": "", "source": str(SOURCE.relative_to(ROOT)), "output": f"assets/characters/{OUTPUT_ID}/atlas.webp", "cols": COLS, "rows": ROWS},
             ensure_ascii=False,
             indent=2,
         )

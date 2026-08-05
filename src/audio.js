@@ -92,10 +92,10 @@ export class AudioEngine {
   }
 
   update(dt) {
-    this.duck = Math.max(0, this.duck - dt * 1.8);
+    this.duck = Math.max(0, Math.min(1.2, this.duck - dt * 1.8));
     const base = this.enabled ? (MUSIC_LEVELS[this.scene] ?? .18) : 0;
-    const musicTarget = base * (1 - this.duck * .32);
-    const pressureTarget = this.enabled && this.scene === 'combat' && this.bossActive ? .19 : 0;
+    const musicTarget = Math.max(0, Math.min(1, base * (1 - this.duck * .32)));
+    const pressureTarget = Math.max(0, Math.min(1, this.enabled && this.scene === 'combat' && this.bossActive ? .19 : 0));
     const blend = 1 - Math.exp(-dt * (pressureTarget > this.pressure.volume ? 3.8 : 5.8));
     this.music.volume += (musicTarget - this.music.volume) * blend;
     this.pressure.volume += (pressureTarget - this.pressure.volume) * blend;
@@ -164,7 +164,7 @@ export class AudioEngine {
   }
 
   weaponSwing(hero = 'heling', step = 1) {
-    const group = hero === 'heling' ? 'polearm' : hero === 'guanyu' ? 'blade' : hero === 'huangzhong' ? 'bow' : 'polearm';
+    const group = hero === 'shutong' ? 'bow' : hero === 'yanshuo' ? 'blade' : 'polearm';
     const heavy = step === 3;
     this.sample(group, { volume: group === 'bow' ? .44 : heavy ? .42 : .31, rate: heavy ? .88 : 1.03 + step * .015, minGap: 45 });
     if (heavy && group !== 'bow') this.tone(108, .075, 'triangle', .018, .62);
@@ -186,14 +186,14 @@ export class AudioEngine {
   }
 
   skill(hero = 'heling') {
-    const group = hero === 'huangzhong' ? 'bow' : 'skillWind';
-    this.sample(group, { volume: group === 'bow' ? .46 : .4, rate: hero === 'zhangfei' ? .82 : 1, minGap: 100 });
+    const group = hero === 'shutong' ? 'bow' : 'skillWind';
+    this.sample(group, { volume: group === 'bow' ? .46 : .4, rate: hero === 'xuanhong' ? .78 : hero === 'yanshuo' ? .9 : hero === 'shutong' ? 1.08 : 1, minGap: 100 });
     this.tone(270, .22, 'sawtooth', .055, 2.55);
     this.tone(620, .16, 'sine', .025, .68, .06);
   }
 
   ultimate(hero = 'heling') {
-    this.sample('ultimate', { volume: .52, rate: hero === 'zhangfei' ? .82 : hero === 'zhaoyun' ? 1.13 : 1, minGap: 220 });
+    this.sample('ultimate', { volume: .52, rate: hero === 'xuanhong' ? .8 : hero === 'yanshuo' ? .9 : hero === 'shutong' ? 1.1 : 1, minGap: 220 });
     this.sample('skillImpact', { volume: .3, rate: .9, delay: .08, minGap: 180 });
     this.duck = Math.max(this.duck, .58);
     this.tone(92, .32, 'sawtooth', .085, 2.8);

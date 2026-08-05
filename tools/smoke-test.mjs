@@ -10,11 +10,15 @@ const required = [
   'public/assets/audio/combat/hit-heavy-01.mp3', 'public/assets/audio/combat/hit-heavy-02.mp3',
   'public/assets/audio/combat/skill-wind-01.mp3', 'public/assets/audio/combat/skill-impact-01.mp3',
   'public/assets/audio/combat/ultimate-blade-01.mp3',
-  'public/assets/characters/heling/atlas.webp', 'public/assets/characters/heling/manifest.json', 'public/assets/characters/guanyu/atlas.webp', 'public/assets/bosses/group-2/atlas.webp',
-  'public/assets/portraits/heling.webp', 'public/assets/ui/portrait-frame.webp',
+  'public/assets/characters/heling/atlas.webp', 'public/assets/characters/heling/manifest.json',
+  'public/assets/characters/yanshuo/atlas.webp', 'public/assets/characters/yanshuo/manifest.json',
+  'public/assets/characters/shutong/atlas.webp', 'public/assets/characters/shutong/manifest.json',
+  'public/assets/characters/xuanhong/atlas.webp', 'public/assets/characters/xuanhong/manifest.json',
+  'public/assets/characters/guanyu/atlas.webp', 'public/assets/bosses/group-2/atlas.webp',
+  'public/assets/portraits/heling.webp', 'public/assets/portraits/yanshuo.webp', 'public/assets/portraits/shutong.webp', 'public/assets/portraits/xuanhong.webp', 'public/assets/ui/portrait-frame.webp',
   'public/assets/ui/select-banner.webp', 'public/assets/ui/story-frame.webp',
   'public/assets/backgrounds/jiuzhou-spring-village.webp', 'public/assets/backgrounds/jiuzhou-thunder-bamboo.webp', 'public/assets/backgrounds/jiuzhou-water-town.webp',
-  'tools/repack-heling-atlas.py',
+  'tools/repack-character-atlas.py',
 ];
 let bad = 0;
 for (const file of required) {
@@ -23,8 +27,10 @@ for (const file of required) {
 const { HEROES, MONSTERS, BOSSES } = await import('../src/actors.js');
 const { LEVELS, TRAP_TYPES } = await import('../src/levels.js');
 const { COMBAT_AUDIO } = await import('../src/audio.js');
-const heroIds = ['heling'];
+const heroIds = ['heling', 'yanshuo', 'shutong', 'xuanhong'];
 if (JSON.stringify(Object.keys(HEROES)) !== JSON.stringify(heroIds)) throw new Error('hero roster mismatch');
+const genders = Object.values(HEROES).map(hero => hero.gender);
+if (genders.filter(gender => gender === '男').length !== 2 || genders.filter(gender => gender === '女').length !== 2) throw new Error('hero gender balance mismatch');
 for (const hero of Object.values(HEROES)) {
   for (const action of ['attack1','attack2','attack3','skill','ultimate']) {
     const frames = hero.frames?.[action];
@@ -54,4 +60,4 @@ for (const file of ['index.html', 'src/game.js', 'src/actors.js', 'src/levels.js
 }
 if (bad) process.exit(1);
 const assetBytes = required.filter(x => x.startsWith('public/')).reduce((sum, file) => sum + fs.statSync(file).size, 0);
-console.log(`Smoke checks passed: 1 hero, 10 enemies, 1 boss, 3 levels, 3 traps, 15 combat samples; required assets ${(assetBytes / 1024 / 1024).toFixed(2)} MiB.`);
+console.log(`Smoke checks passed: 4 heroes (2男2女), 10 enemies, 1 boss, 3 levels, 3 traps, 15 combat samples; required assets ${(assetBytes / 1024 / 1024).toFixed(2)} MiB.`);

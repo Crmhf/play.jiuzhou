@@ -216,7 +216,7 @@ async function makeActor(kind,data,x,y){
   const tex=await loadTexture(data.atlas,data.name[0],data.fallbackAtlas||''); const grid=isPlayer?[data.atlasCols||3,data.atlasRows||3]:(isBoss?[data.atlasCols||5,data.atlasRows||1]:[4,3]); const cell=isPlayer?0:data.cell;
   const mat=chromaMaterial(tex,grid[0],grid[1],cell,data.color||0xffffff); const isHero=isPlayer; const baseScale=isHero?2.7:(isBoss?data.scale:Math.min(data.scale||1.45,2.05)); const geo=new THREE.PlaneGeometry(baseScale,baseScale*(isHero?1.18:1.05)*(isBoss?1.15:1)); const mesh=new THREE.Mesh(geo,mat);mesh.position.z=.7+(isBoss?.2:0);worldGroup.add(mesh);
   let shadow=null;if(isBoss){shadow=new THREE.Mesh(new THREE.CircleGeometry(1,32),new THREE.MeshBasicMaterial({color:'#050207',transparent:true,opacity:.34,depthWrite:false}));shadow.scale.set(1.45,.32,1);shadow.position.z=.42;worldGroup.add(shadow)}
-  const e={kind,data,body,foot,mesh,shadow,mat,grid,hp:data.hp+(isPlayer?upgrades.hp:0),maxHp:data.hp+(isPlayer?upgrades.hp:0),energy:isPlayer?20:0,shield:0,alive:true,dying:false,destroyed:false,ground:0,facing:isPlayer?1:-1,state:'idle',stateTime:0,deathTime:0,deathDuration:isBoss?1.05:.34,attackCd:0,skillCd:0,dashCd:0,moveLock:0,invuln:0,combo:0,comboTimer:0,attackStep:0,aiTimer:Math.random(),spawnX:x,activeAttack:false,lastFrame:-1,motionPhase:0,motionBlend:0,lastStep:-1,bossPhase:1,bossAction:isBoss?-1:0,bossTrailTimer:0,bossHit:false,phaseImpactDone:false,shadowGroundY:y-1.02,actionPhase:'idle',actionDuration:0,actionSerial:0,actionTrailTimer:0,actionImpactDone:false};
+  const e={kind,data,body,foot,mesh,shadow,mat,grid,hp:data.hp+(isPlayer?upgrades.hp:0),maxHp:data.hp+(isPlayer?upgrades.hp:0),energy:isPlayer?20:0,shield:0,frozen:0,alive:true,dying:false,destroyed:false,ground:0,facing:isPlayer?1:-1,state:'idle',stateTime:0,deathTime:0,deathDuration:isBoss?1.05:.34,attackCd:0,skillCd:0,dashCd:0,moveLock:0,invuln:0,combo:0,comboTimer:0,attackStep:0,aiTimer:Math.random(),spawnX:x,activeAttack:false,lastFrame:-1,motionPhase:0,motionBlend:0,lastStep:-1,bossPhase:1,bossAction:isBoss?-1:0,bossTrailTimer:0,bossHit:false,phaseImpactDone:false,shadowGroundY:y-1.02,actionPhase:'idle',actionDuration:0,actionSerial:0,actionTrailTimer:0,actionImpactDone:false};
   e.spine=new SpineActorBridge(e);body.setUserData(e);entities.push(e);return e;
 }
 function destroyEntity(e){if(!e||e.destroyed)return;e.destroyed=true;e.alive=false;e.spine?.dispose();if(e.body&&world)world.destroyBody(e.body);worldGroup.remove(e.mesh);if(e.shadow)worldGroup.remove(e.shadow);if(e===activeBoss){activeBoss=null;ui.bossHud.classList.remove('show')} }
@@ -253,7 +253,10 @@ async function spawnBoss(data,x){activeBoss=await makeActor('boss',data,x,1.3);i
 function aliveEnemies(){return entities.filter(e=>e.alive&&e.kind!=='player')}
 
 const HERO_COMBAT_CALLS={
-  heling:{skill:['水灵·润泽 · 清泉回春','水行其道，火焰退散'],ultimate:['春木·万物生','五行初醒，灵迹归位']}
+  heling:{skill:['水灵·润泽 · 清泉回春','水行其道，火焰退散'],ultimate:['春木·万物生','五行初醒，灵迹归位']},
+  yanshuo:{skill:['小暑·炎息燎原','赤焰开路，焚尽荆棘'],ultimate:['大暑·熔岩焚野','炎夏正午，九州如火']},
+  shutong:{skill:['白露·金风叶刃','金叶破空，白露凝锋'],ultimate:['秋分·万叶归宗','一夜秋风，万叶归宗']},
+  xuanhong:{skill:['大雪·玄冰护体','玄冰凝甲，风雪不侵'],ultimate:['冬至·寒泉归海','寒泉倒卷，万籁俱寂']}
 };
 function showCombatCallout(type,title,subtitle,accent='#f7c85c'){
   if(!ui.callout)return;const [small,strong,span]=ui.callout.children;
@@ -267,6 +270,13 @@ function heroAfterimage(e,opacity=.2){
 }
 function impactFx(x,y,color,dir=1,strength=1){
   const s=Math.min(2.2,strength);ringFx(x,y,color,.55*s,.24);slashFx(x+dir*.12,y+.18,color,dir,.62*s);burst(x+dir*.22,y,color,Math.round(10+8*s),4.5+2*s);
+}
+function freezeEnemy(e,duration=1.5){
+  if(!e?.alive||e.kind==='player'||e.frozen>0)return;
+  e.frozen=duration;e.activeAttack=false;e.state='idle';e.stateTime=0;
+  e.mat.uniforms.tint.value.set('#bfe9f2');e.mat.uniforms.emission.value=.18;
+  ringFx(e.body.getPosition().x,e.body.getPosition().y,'#bceeff',1.5,.35);
+  burst(e.body.getPosition().x,e.body.getPosition().y,'#d9f6ff',16,5);
 }
 function damage(target,amount,source,force=5){
   if(!target?.alive||target.dying||target.invuln>0)return false;
@@ -318,31 +328,93 @@ function skill(){
   const p=player.body.getPosition(),cd=player.data.skillCd*(1-upgrades.cooldown*.06);
   player.skillCd=cd;const serial=beginPlayerAction('skill',player.data.motion?.skill??.8,'skill');
   player.actionFrames=actionFrames(player.data.frames,'skill');audio.skill(selectedHero);
-  const call=HERO_COMBAT_CALLS.heling.skill;showCombatCallout('skill',call[0],call[1],player.data.accent);shake=.55;
+  const call=HERO_COMBAT_CALLS[selectedHero]?.skill||HERO_COMBAT_CALLS.heling.skill;showCombatCallout('skill',call[0],call[1],player.data.accent);shake=.55;
   player.invuln=.42;
-  // 水灵既是攻击技，也是第三关的机关钥匙：按 K 可灭掉视野内的火焰机关。
-  extinguishFire(p.x, p.y, 7);
-  for(let n=0;n<3;n++)setTimeout(()=>{
-    if(player.actionSerial!==serial||state!=='playing')return;
-    const q=player.body.getPosition();const hits=hitArea(q.x+player.facing*1.5,q.y,3.9,player.data.attack*.92,10+n*2);
-    slashFx(q.x+player.facing*1.2,q.y+.3,'#7be1e8',player.facing,1.15+n*.15);
-    burst(q.x+player.facing*.8,q.y+.2,'#a5f4e8',14,6);
-    if(hits){hitStop=.06;impactFx(q.x+player.facing*1.6,q.y,'#b8fff1',player.facing,1.05)}
-  },n*115);
+  if(selectedHero==='heling'){
+    // 水灵既是攻击技，也是第三关的机关钥匙：按 K 可灭掉视野内的火焰机关。
+    extinguishFire(p.x, p.y, 7);
+    for(let n=0;n<3;n++)setTimeout(()=>{
+      if(player.actionSerial!==serial||state!=='playing')return;
+      const q=player.body.getPosition();const hits=hitArea(q.x+player.facing*1.5,q.y,3.9,player.data.attack*.92,10+n*2);
+      slashFx(q.x+player.facing*1.2,q.y+.3,'#7be1e8',player.facing,1.15+n*.15);
+      burst(q.x+player.facing*.8,q.y+.2,'#a5f4e8',14,6);
+      if(hits){hitStop=.06;impactFx(q.x+player.facing*1.6,q.y,'#b8fff1',player.facing,1.05)}
+    },n*115);
+  }else if(selectedHero==='yanshuo'){
+    // 炎息燎原：三段火浪向前推进，伤害逐段提升。
+    for(let n=0;n<3;n++)setTimeout(()=>{
+      if(player.actionSerial!==serial||state!=='playing')return;
+      const q=player.body.getPosition();const power=player.data.attack*(1.05+n*.12);
+      const hits=hitArea(q.x+player.facing*1.6,q.y,4.4,power,11+n*2.5);
+      slashFx(q.x+player.facing*1.4,q.y+.3,'#ff9a5c',player.facing,1.3+n*.2);
+      burst(q.x+player.facing*.9,q.y+.2,'#ffcf7d',18,7);
+      ringFx(q.x+player.facing*1.5,q.y,'#ff7a3c',1.1+n*.3,.3);
+      if(hits){hitStop=.07;impactFx(q.x+player.facing*1.8,q.y,'#ffb066',player.facing,1.1)}
+    },n*120);
+  }else if(selectedHero==='shutong'){
+    // 金风叶刃：五片金叶呈扇形飞出，远程消耗敌人。
+    for(let n=0;n<5;n++){
+      const spread=(n-2)*.34;
+      setTimeout(()=>{
+        if(player.actionSerial!==serial||state!=='playing')return;
+        const q=player.body.getPosition();
+        spawnProjectile(q.x+player.facing*.9,q.y+.45,'#f3d27a',player.facing*(11+Math.abs(n-2)*2.2)+spread,Math.abs(n-2)*1.05,player.data.attack*.72,player,'arrow');
+        slashFx(q.x+player.facing*.9,q.y+.4,'#ffe4a0',player.facing,1+Math.abs(n-2)*.12);
+        audio.tone(640+n*80,.08,'triangle',.025,1.7);
+      },n*70);
+    }
+  }else{
+    // 大雪·玄冰护体：生成护盾并冻结近身敌人。
+    player.shield=Math.min(80,player.shield+36);
+    ringFx(p.x,p.y,'#bceeff',2.4,.7);burst(p.x,p.y,'#d9f6ff',26,8);
+    entities.forEach(e=>{if(e.alive&&e.kind!=='player'&&e.kind!=='boss'&&Math.abs(e.body.getPosition().x-p.x)<6.5){freezeEnemy(e,1.7);damage(e,player.data.attack*.55,player,7)}});
+    audio.tone(240,.35,'sine',.06,1.2);toast('玄冰护体 · 护盾 +36');
+  }
 }
 function ultimate(){
   if(player.energy<100||!player.alive)return;
   player.energy=0;const serial=beginPlayerAction('ultimate',player.data.motion?.ultimate??1.2,'ultimate');
   player.actionFrames=actionFrames(player.data.frames,'ultimate');hitStop=.18;shake=1.55;
   ui.flash.style.background=player.data.color;ui.flash.style.opacity=.52;setTimeout(()=>ui.flash.style.opacity=0,90);audio.ultimate(selectedHero);
-  const call=HERO_COMBAT_CALLS.heling.ultimate;showCombatCallout('ultimate',call[0],call[1],player.data.accent);
+  const call=HERO_COMBAT_CALLS[selectedHero]?.ultimate||HERO_COMBAT_CALLS.heling.ultimate;showCombatCallout('ultimate',call[0],call[1],player.data.accent);
   const p=player.body.getPosition();
-  for(let i=0;i<9;i++)setTimeout(()=>{
-    if(state!=='playing'||player.actionSerial!==serial)return;
-    const x=p.x+(i-4)*2.1;hitArea(x,p.y,2.7,player.data.attack*1.48,14);
-    burst(x,p.y,'#b8ed8c',24,11);slashFx(x,p.y+.35,'#e8ffae',i<4?-1:1,1.35);impactFx(x,p.y,'#d9ff9d',i<4?-1:1,1.05);
-  },i*70);
-  extinguishFire(p.x,p.y,12);
+  if(selectedHero==='heling'){
+    for(let i=0;i<9;i++)setTimeout(()=>{
+      if(state!=='playing'||player.actionSerial!==serial)return;
+      const x=p.x+(i-4)*2.1;hitArea(x,p.y,2.7,player.data.attack*1.48,14);
+      burst(x,p.y,'#b8ed8c',24,11);slashFx(x,p.y+.35,'#e8ffae',i<4?-1:1,1.35);impactFx(x,p.y,'#d9ff9d',i<4?-1:1,1.05);
+    },i*70);
+    extinguishFire(p.x,p.y,12);
+  }else if(selectedHero==='yanshuo'){
+    for(let i=0;i<10;i++)setTimeout(()=>{
+      if(state!=='playing'||player.actionSerial!==serial)return;
+      const x=p.x+(i-4.5)*2.25,y=p.y+2.2;hitArea(x,p.y,3,player.data.attack*1.55,15);
+      burst(x,y,'#ff9a4d',26,9);ringFx(x,p.y,'#ff6b35',1.5,.3);
+      spawnProjectile(x,y+.5,'#ffd27d',(i%5-2)*1.6,-5.5,player.data.attack*.6,player,'orb');
+      slashFx(x,p.y+.35,'#ffcf7d',i%2?-1:1,1.3);
+    },i*65);
+  }else if(selectedHero==='shutong'){
+    for(let i=0;i<12;i++)setTimeout(()=>{
+      if(state!=='playing'||player.actionSerial!==serial)return;
+      const angle=(i/12)*Math.PI*2,x=p.x+Math.cos(angle)*1.1,y=p.y+.5+Math.sin(angle)*.7;
+      spawnProjectile(x,y,'#f7dd8a',Math.cos(angle)*10,Math.sin(angle)*6,player.data.attack*.72,player,'arrow');
+      burst(x,y,'#ffe9b0',10,5);slashFx(x,y+.2,'#f7dd8a',Math.sign(Math.cos(angle))||1,1.05);
+    },i*60);
+    for(let i=0;i<5;i++)setTimeout(()=>{
+      if(state!=='playing'||player.actionSerial!==serial)return;
+      hitArea(p.x+(i-2)*3,p.y,3.2,player.data.attack*1.35,13);
+      ringFx(p.x+(i-2)*3,p.y,'#f3d27a',2,.4);burst(p.x+(i-2)*3,p.y,'#f7dd8a',24,9);
+    },i*110);
+  }else{
+    entities.forEach(e=>{if(e.alive&&e.kind!=='player'){if(e.kind!=='boss')freezeEnemy(e,2.4);else{e.frozen=Math.max(e.frozen,.8);e.state='idle';e.stateTime=0;e.activeAttack=false}damage(e,player.data.attack*1.7,player,13)}});
+    ringFx(p.x,p.y,'#d9f6ff',6.5,1);burst(p.x,p.y,'#bfe9f2',60,12);
+    for(let i=0;i<8;i++)setTimeout(()=>{
+      if(state!=='playing'||player.actionSerial!==serial)return;
+      const x=p.x+(i-3.5)*2.6;hitArea(x,p.y,2.8,player.data.attack*.9,11);
+      burst(x,p.y,'#cff4ff',22,8);slashFx(x,p.y+.3,'#d9f6ff',i%2?-1:1,1.2);
+    },i*85);
+    toast('寒泉归海 · 万物凝霜');
+  }
 }
 
 function dash(){
@@ -421,6 +493,7 @@ function updateEnemies(dt){
   if(!player?.body)return;
   const living=aliveEnemies().filter(e=>!e.dying);let attacking=living.filter(e=>e.activeAttack).length;
   living.forEach(e=>{e.invuln=Math.max(0,e.invuln-dt);e.attackCd=Math.max(0,e.attackCd-dt);e.stateTime+=dt;const p=e.body.getPosition(),pp=player.body.getPosition(),dx=pp.x-p.x,dist=Math.abs(dx),boss=e.kind==='boss';if(!boss||!['windup','attack'].includes(e.state))e.facing=Math.sign(dx)||-1;
+    if(e.frozen>0){e.frozen-=dt;e.state='idle';e.stateTime=0;e.activeAttack=false;const fv=e.body.getLinearVelocity();e.body.setLinearVelocity(planck.Vec2(fv.x*.8,Math.max(fv.y,-6)));if(e.frozen<=0){e.mat.uniforms.tint.value.set(e.data.color||0xffffff);e.mat.uniforms.emission.value=0}return}
     if(e.state==='hurt'&&e.stateTime<.22)return;if(e.state==='hurt'){e.state='idle';e.stateTime=0;e.activeAttack=false}
     if(boss&&updateBossAction(e,dt,p,pp))return;
     const ideal=e.data.ranged?5.2:(boss?3.15:1.6);let targetV=0;
@@ -614,13 +687,13 @@ if(DEV_RUNTIME){
     setBossHpRatio:(ratio)=>{if(activeBoss?.alive)activeBoss.hp=activeBoss.maxHp*THREE.MathUtils.clamp(Number(ratio)||0,.01,1);return activeBoss?{hp:activeBoss.hp,phase:activeBoss.bossPhase,state:activeBoss.state}:null},
     setEnergy:(value=100)=>{if(player)player.energy=THREE.MathUtils.clamp(Number(value)||0,0,100);updateHUD();return player?.energy??0},
     start:async(index,hero='heling')=>{selectedHero=HEROES[hero]?hero:'heling';await startLevel(THREE.MathUtils.clamp(index,0,LEVELS.length-1));await enterCombat();return globalThis.__JIUZHOU_DEBUG__.snapshot()},
-    introspect:()=>entities.map(e=>({kind:e.kind,name:e.data?.name,pos:e.body?.getPosition(),scale:{x:e.mesh.scale.x,y:e.mesh.scale.y},cell:[e.mat?.uniforms?.cell?.value?.x,e.mat?.uniforms?.cell?.value?.y],frame:e.mat?.uniforms?.cell?.value?.x+(e.mat?.uniforms?.cell?.value?.y*(e.grid?.[0]||3)),state:e.state,opacity:e.mat?.uniforms?.opacity?.value,scaleXZ:e.data?.scale}))
+    introspect:()=>entities.map(e=>({kind:e.kind,name:e.data?.name,hp:Math.round(e.hp),maxHp:e.maxHp,pos:e.body?.getPosition(),scale:{x:e.mesh.scale.x,y:e.mesh.scale.y},cell:[e.mat?.uniforms?.cell?.value?.x,e.mat?.uniforms?.cell?.value?.y],frame:e.mat?.uniforms?.cell?.value?.x+(e.mat?.uniforms?.cell?.value?.y*(e.grid?.[0]||3)),state:e.state,frozen:e.frozen||0,opacity:e.mat?.uniforms?.opacity?.value,scaleXZ:e.data?.scale}))
   };
 }
 
 // Character selection UI
-const HERO_BADGES={heling:'节气行者'};
-const HERO_ROLE_DESC={heling:'近战 · 五行辅助'};
+const HERO_BADGES={heling:'节气行者',yanshuo:'炎夏行者',shutong:'金秋行者',xuanhong:'玄冬行者'};
+const HERO_ROLE_DESC={heling:'近战 · 五行辅助',yanshuo:'近战 · 高爆发',shutong:'远程 · 金叶飞刃',xuanhong:'近战 · 冰盾控场'};
 Object.entries(HEROES).forEach(([id,h])=>{
   const card=document.createElement('article');
   card.className='hero-card';card.dataset.id=id;
@@ -651,7 +724,7 @@ Object.entries(HEROES).forEach(([id,h])=>{
   };
   ui.cards.appendChild(card);
 });
-// Only one playable hero in the first slice: preselect 禾灵 so the first launch is frictionless.
+// 默认选中禾灵，方便第一次进入游戏即可直接开战。
 ui.cards.querySelector('.hero-card')?.click();
 $('#start-select').onclick=()=>{audio.start('select');audio.setScene('select');showScreen(ui.select);state='select'};ui.begin.onclick=()=>startLevel(0);$('#story-go').onclick=enterCombat;$('#resume').onclick=resume;$('#restart').onclick=()=>startLevel(levelIndex);$('#pause-btn').onclick=togglePause;$('#sound-toggle').onclick=e=>{e.currentTarget.textContent=audio.toggle()?'♫':'×'};
 

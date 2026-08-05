@@ -9,7 +9,7 @@ const add=(g,geo,mat,pos=[0,0,0],rot=[0,0,0])=>{const m=new THREE.Mesh(geo,mat);
  * hidden-side fidelity. Every build exposes the same action-ready runtime seam.
  */
 export function buildHeroRelic(hero){
-  const g=new THREE.Group(),gold=metal(0xe5a92f,0x6d3108),dark=metal(0x4d1b18),jade=metal(0x55b779,0x123c22),silver=metal(0xe7edf5,0x284c75),red=metal(0xa62b2c,0x3b0808);
+  const g=new THREE.Group(),gold=metal(0xe5a92f,0x6d3108),dark=metal(0x4d1b18),jade=metal(0x55b779,0x123c22),silver=metal(0xe7edf5,0x284c75),red=metal(0xa62b2c,0x3b0808),fire=metal(0xd96a3a,0x5a1505),ice=metal(0x7fd4e8,0x0d3a52);
   if(hero==='heling'){
     add(g,new THREE.CylinderGeometry(.07,.1,4.8,14),dark,[0,-.15,0],[0,0,.18]);
     add(g,new THREE.TorusGeometry(.26,.055,8,24),gold,[.55,1.88,0],[0,0,.18]);
@@ -30,6 +30,28 @@ export function buildHeroRelic(hero){
     add(g,new THREE.ConeGeometry(.25,.95,5),silver,[.62,2.72,0],[0,0,-.16]);
     add(g,new THREE.TorusGeometry(.23,.045,8,24),gold,[.33,1.8,0],[0,0,.16]);
     for(let i=0;i<5;i++)add(g,new THREE.ConeGeometry(.035,.65,5),jade,[.2+i*.08,1.48-i*.04,.02],[0,0,.15+i*.04]);
+  }else if(hero==='yanshuo'){
+    add(g,new THREE.CylinderGeometry(.08,.11,5.2,14),dark,[0,-.2,0],[0,0,.18]);
+    const blade=new THREE.Shape();blade.moveTo(-.14,-.5);blade.quadraticCurveTo(.8,-.14,1,.42);blade.quadraticCurveTo(.2,.84,-.3,.4);blade.closePath();
+    add(g,new THREE.ExtrudeGeometry(blade,{depth:.14,bevelEnabled:true,bevelSize:.04,bevelThickness:.04}),fire,[.68,2.3,-.06],[0,0,-.06]);
+    add(g,new THREE.TorusGeometry(.3,.06,8,24),gold,[.55,2.02,0],[0,0,.18]);
+    add(g,new THREE.ConeGeometry(.2,.7,6),red,[.3,-2.42,0],[0,0,.18]);
+    for(let i=0;i<4;i++)add(g,new THREE.ConeGeometry(.05,.5,5),fire,[.75+i*.09,1.4-i*.08,.08],[0,0,-.12+i*.05]);
+  }else if(hero==='shutong'){
+    add(g,new THREE.CylinderGeometry(.06,.09,3.4,12),gold,[0,0,0],[0,0,.16]);
+    add(g,new THREE.TorusGeometry(.5,.07,8,28),gold,[0,1.1,0],[0,0,0]);
+    add(g,new THREE.TorusGeometry(.34,.05,8,24),silver,[0,1.1,0],[0,0,.2]);
+    for(let i=0;i<6;i++){
+      const a=i/6*Math.PI*2;add(g,new THREE.ConeGeometry(.06,.55,5),jade,[Math.cos(a)*.62,1.1+Math.sin(a)*.62,0],[0,0,a+Math.PI/2]);
+    }
+    add(g,new THREE.SphereGeometry(.12,10,10),red,[0,1.1,0],[0,0,0]);
+  }else if(hero==='xuanhong'){
+    add(g,new THREE.CylinderGeometry(.065,.1,5.6,14),ice,[0,-.15,0],[0,0,.18]);
+    add(g,new THREE.ConeGeometry(.32,1.05,5),silver,[.62,2.45,0],[0,0,-.2]);
+    add(g,new THREE.ConeGeometry(.16,.6,5),ice,[.42,2.55,0],[0,0,-.28]);
+    add(g,new THREE.ConeGeometry(.16,.6,5),ice,[.82,2.55,0],[0,0,.08]);
+    add(g,new THREE.TorusGeometry(.24,.045,8,24),gold,[.42,1.72,0],[0,0,.16]);
+    add(g,new THREE.OctahedronGeometry(.2,0),ice,[-.35,-2.1,.05],[.4,.2,0]);
   }else{
     const bow=new THREE.CurvePath();
     const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(-1.2,-1.9,0),new THREE.Vector3(-.55,0,0),new THREE.Vector3(-1.2,1.9,0)]);
@@ -39,7 +61,7 @@ export function buildHeroRelic(hero){
     add(g,new THREE.ConeGeometry(.14,.48,5),silver,[.73,2.22,0],[0,0,-.08]);
   }
   g.userData.sculptRuntime={
-    approximation:'stylized procedural Three Kingdoms weapon reconstructed from generated concept art; hidden-side geometry is inferred',
+    approximation:'stylized procedural 九州灵迹 weapon reconstructed from generated concept art; hidden-side geometry is inferred',
     pivots:['root'],sockets:['handGrip','skillTrail'],clickableParts:g.children.map((_,i)=>`part-${i}`),explodeScale:1.8,
     qualityContract:{silhouette:'recognizable signature weapon at gameplay scale',materials:'metal, lacquered wood and emissive accents',interaction:'hand socket and skill trail anchor',performance:'under 18 meshes'}
   };
