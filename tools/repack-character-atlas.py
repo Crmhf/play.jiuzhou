@@ -117,7 +117,7 @@ def main():
     final_webp = OUT_DIR / "atlas.webp"
     sheet.save(raw_png, "PNG")
     result = subprocess.run(
-        ["cwebp", "-quiet", "-q", "92", str(raw_png), "-o", str(final_webp)],
+        ["cwebp", "-quiet", "-q", "88", str(raw_png), "-o", str(final_webp)],
         capture_output=True,
         text=True,
     )

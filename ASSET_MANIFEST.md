@@ -8,7 +8,9 @@
 |---|---|---|---|
 | 十关复杂背景 | `public/assets/backgrounds/level-01.webp` … `level-10.webp` | `gpt-image-2`，复杂国风横版场景提示词 | 虎牢关样片已成功；其余按关卡故事重新生成并覆盖旧占位图 |
 | 四季行者动作图集 | `public/assets/characters/{heling,yanshuo,shutong,xuanhong}/atlas.webp` | `gpt-image-2` + `tools/repack-character-atlas.py` | 四套 1536×1024 原始图集按内容边界裁剪重排为 1024×768 严格 4×3；对应春木/夏火/秋金/冬水 |
-| 四季行者立绘 | `public/assets/portraits/{yanshuo,shutong,xuanhong}.webp` | `gpt-image-2` | 1024×1024 国风工笔半身立绘，与禾灵立绘同风格 |
+| 四季行者 2.5D 动作图集 | `public/assets/characters/{heling,yanshuo,shutong,xuanhong}/atlas.webp` | `gpt-image-2` + `tools/repack-character-atlas.py` | Q版2.5D 立体厚涂重做：大头小身、体积光、环境光遮蔽、深色描边、自带地面投影；按内容边界重排为 1024×768 严格 4×3 |
+| 四季行者立绘 | `public/assets/portraits/{heling,yanshuo,shutong,xuanhong}.webp` | `gpt-image-2` | 1024×1024 Q版2.5D 半身立绘，立体厚涂，纯绿键背景 |
+| 小怪 2.5D 立体图集 | `public/assets/monsters/stereo/atlas.webp` | `gpt-image-2` + `tools/compose-monster-atlas.py` | 10 张单只小怪按内容边界合成 4×3 图集，运行时统一抠绿键 |
 | 四武将动作图集 | `public/assets/characters/*/atlas.webp` | MiniMax `image-01` | 3×3 动作布局，关羽/张飞/赵云/黄忠，运行时自适应色键抠图 |
 | 30 种敌军图集 | `public/assets/monsters/group-*` | MiniMax `image-01` | 三组 4×3 图集，数据层映射 30 种敌军 |
 | 10 Boss 动作图集 | `public/assets/bosses/animated/*/atlas.webp` | MiniMax `image-01` + `tools/repack-boss-atlases.py` | 每名 Boss 独立 4×3 多帧图集；离线绿幕重排消除跨格武器、重复姿势和生成模型偶发 4 行/5 列排版 |
@@ -26,7 +28,7 @@
 - `gpt-image-2`：可用，已成功返回 1536×1024 复杂背景。
 - MiniMax `image-01`：可用，已生成武将、敌军、Boss 和 UI 图集。
 - MiniMax `music-2.6`：用于生成纯音乐战斗主题。
-- `Qwen/Qwen-image`：2026-08-04 调用返回 `model_not_found` / 502，未虚构产物；保留 `tools/generate-assets.mjs qwen-ui` 作为通道恢复后的可选补充。
+- `Qwen/Qwen-image`：多次调用返回 `model_not_found` / 503，未虚构产物；本轮继续保留为通道恢复后的可选补充，实际素材统一走 `gpt-image-2`。
 - `deepseek-ai/DeepSeek-OCR`：按用户配置的 `http://cf.douzimi.com:58728/v1` 调用过精灵图和游戏截图识别；该通道对复杂游戏画面返回不稳定，正式排版验证以程序化网格/像素检查和浏览器烟测为准。
 
 ## 可复现生成
@@ -46,6 +48,12 @@ npm run assets:heling:repack
 npm run assets:character:repack -- .gen/raw-character-atlas/yanshuo/atlas.webp yanshuo
 npm run assets:character:repack -- .gen/raw-character-atlas/shutong/atlas.webp shutong
 npm run assets:character:repack -- .gen/raw-character-atlas/xuanhong/atlas.webp xuanhong
+npm run assets:stereo:generate
+python3 tools/repack-character-atlas.py .gen/stereo-hero/heling/atlas.webp heling
+python3 tools/repack-character-atlas.py .gen/stereo-hero/yanshuo/atlas.webp yanshuo
+python3 tools/repack-character-atlas.py .gen/stereo-hero/shutong/atlas.webp shutong
+python3 tools/repack-character-atlas.py .gen/stereo-hero/xuanhong/atlas.webp xuanhong
+npm run assets:monsters:compose
 ```
 
 Boss 生成后需执行本地重排与视觉 QA；原始生成图备份在 Git 忽略的 `.gen/raw-boss-atlases/`。生成器只读取环境变量，响应摘要写入被 Git 忽略的 `.gen/`。不要把长期密钥放到前端 JavaScript、README、提交历史或服务器静态目录。

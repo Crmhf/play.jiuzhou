@@ -61,7 +61,7 @@ const enemySpecs = [
 ];
 
 export const MONSTERS = enemySpecs.map(([name, type, ranged, heavy, hp, attack, speed, color], id) => ({
-  id, name, type, group: 1, cell: id % 10, atlas: 'assets/monsters/group-1/atlas.webp',
+  id, name, type, group: 1, cell: id % 10, atlas: 'assets/monsters/stereo/atlas.webp',
   fallbackAtlas: 'assets/monsters/group-2/atlas.webp', ranged, heavy, hp, attack, speed,
   scale: heavy ? 2.15 : 1.75, color
 }));

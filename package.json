@@ -12,6 +12,8 @@
     "inventory:spine": "node tools/inventory-spine.mjs",
     "assets:help": "node tools/generate-assets.mjs --help",
     "assets:characters:generate": "node tools/generate-characters.mjs",
+    "assets:stereo:generate": "node tools/generate-stereo-characters.mjs",
+    "assets:monsters:compose": "python3 tools/compose-monster-atlas.py",
     "assets:heling:repack": "python3 tools/repack-character-atlas.py",
     "assets:character:repack": "python3 tools/repack-character-atlas.py",
     "assets:boss:repack": "python3 tools/repack-boss-atlases.py",

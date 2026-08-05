@@ -30,7 +30,8 @@
 ## 资源与音频策略
 
 - 复杂关卡背景：使用 `gpt-image-2` 生成，再放入 `public/assets/backgrounds/jiuzhou-*.webp`。
-- 主角图集：`gpt-image-2` 生成四套原始十二格图集后，由 `tools/repack-character-atlas.py` 按内容边界裁剪并重排为 1024×768 严格 4×3，避免生成模型偶发多行/留白导致运行时精灵错位。
+- 主角与小怪图集：以本地 Q版 Spine/8方向素材为风格参考，`gpt-image-2` 生成 Q版2.5D 立体厚涂原始图，英雄由 `tools/repack-character-atlas.py` 重排为 1024×768 严格 4×3，小怪由 `tools/compose-monster-atlas.py` 合成为 `monsters/stereo/atlas.webp`；全部 WebP 压缩并统一绿键抠图。
+- 立体层次：英雄、小怪、Boss 全部带实体地面阴影，跳跃/下落时阴影随高度缩小变淡。
 - 简单 UI/肖像补充：使用 MiniMax `image-01` 与 Qwen Image 生成，密钥只通过 `.env.local` 读取，绝不写入客户端 bundle。
 - 音乐：使用 MiniMax `music-2.6` 生成 `jiuzhou-theme.mp3` 与 `jiuzhou-boss.mp3`。
 - 出招音效：复用本地古风打斗素材包，经 `tools/import-combat-audio.py` 做裁切、限幅和 MP3 转码；`src/audio.js` 按普攻、技能、Boss、受击分层播放，并保留程序化兜底音效。

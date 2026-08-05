@@ -15,10 +15,13 @@ const required = [
   'public/assets/characters/shutong/atlas.webp', 'public/assets/characters/shutong/manifest.json',
   'public/assets/characters/xuanhong/atlas.webp', 'public/assets/characters/xuanhong/manifest.json',
   'public/assets/characters/guanyu/atlas.webp', 'public/assets/bosses/group-2/atlas.webp',
+  'public/assets/monsters/stereo/atlas.webp', 'public/assets/monsters/stereo/manifest.json',
   'public/assets/portraits/heling.webp', 'public/assets/portraits/yanshuo.webp', 'public/assets/portraits/shutong.webp', 'public/assets/portraits/xuanhong.webp', 'public/assets/ui/portrait-frame.webp',
   'public/assets/ui/select-banner.webp', 'public/assets/ui/story-frame.webp',
   'public/assets/backgrounds/jiuzhou-spring-village.webp', 'public/assets/backgrounds/jiuzhou-thunder-bamboo.webp', 'public/assets/backgrounds/jiuzhou-water-town.webp',
   'tools/repack-character-atlas.py',
+  'tools/compose-monster-atlas.py',
+  'tools/generate-stereo-characters.mjs',
 ];
 let bad = 0;
 for (const file of required) {

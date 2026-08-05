@@ -215,7 +215,7 @@ async function makeActor(kind,data,x,y){
   const foot=body.createFixture(planck.Box(width*.32,.08,planck.Vec2(0,-height/2-.07),0),{isSensor:true,userData:{type:'foot'},filterCategoryBits:0x8,filterMaskBits:0x1});
   const tex=await loadTexture(data.atlas,data.name[0],data.fallbackAtlas||''); const grid=isPlayer?[data.atlasCols||3,data.atlasRows||3]:(isBoss?[data.atlasCols||5,data.atlasRows||1]:[4,3]); const cell=isPlayer?0:data.cell;
   const mat=chromaMaterial(tex,grid[0],grid[1],cell,data.color||0xffffff); const isHero=isPlayer; const baseScale=isHero?2.3:(isBoss?data.scale*1.12:Math.min((data.scale||1.45)*1.12,2.35)); const geo=new THREE.PlaneGeometry(baseScale,baseScale*(isHero?1.18:1.05)*(isBoss?1.15:1)); const mesh=new THREE.Mesh(geo,mat);mesh.position.z=.7+(isBoss?.2:0);worldGroup.add(mesh);
-  let shadow=null;if(isBoss){shadow=new THREE.Mesh(new THREE.CircleGeometry(1,32),new THREE.MeshBasicMaterial({color:'#050207',transparent:true,opacity:.34,depthWrite:false}));shadow.scale.set(1.45,.32,1);shadow.position.z=.42;worldGroup.add(shadow)}
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(1,32),new THREE.MeshBasicMaterial({color:'#050207',transparent:true,opacity:.3,depthWrite:false}));shadow.scale.set(isBoss?1.45:isPlayer?.95:data.heavy?.95:.8,.3,1);shadow.position.z=.42;worldGroup.add(shadow);
   const e={kind,data,body,foot,mesh,shadow,mat,grid,hp:data.hp+(isPlayer?upgrades.hp:0),maxHp:data.hp+(isPlayer?upgrades.hp:0),energy:isPlayer?20:0,shield:0,frozen:0,alive:true,dying:false,destroyed:false,ground:0,facing:isPlayer?1:-1,state:'idle',stateTime:0,deathTime:0,deathDuration:isBoss?1.05:.34,attackCd:0,skillCd:0,dashCd:0,moveLock:0,invuln:0,combo:0,comboTimer:0,attackStep:0,aiTimer:Math.random(),spawnX:x,activeAttack:false,lastFrame:-1,motionPhase:0,motionBlend:0,lastStep:-1,bossPhase:1,bossAction:isBoss?-1:0,bossTrailTimer:0,bossHit:false,phaseImpactDone:false,shadowGroundY:y-1.02,actionPhase:'idle',actionDuration:0,actionSerial:0,actionTrailTimer:0,actionImpactDone:false};
   e.spine=new SpineActorBridge(e);body.setUserData(e);entities.push(e);return e;
 }
@@ -648,8 +648,8 @@ function animateEntities(t,dt){entities.forEach(e=>{
       else if(e.state==='phase'){const surge=1+Math.sin(e.stateTime*24)*.07;scaleX*=surge;scaleY*=surge;bob+=Math.abs(pulse)*.16;e.mat.uniforms.rimStrength.value=1.8;e.mat.uniforms.emission.value=.32}
       else if(e.state==='death'){const k=THREE.MathUtils.clamp(e.deathTime/e.deathDuration,0,1),fall=k*k*(3-2*k);lean+=-e.facing*fall*1.18;bob-=fall*.62;forward-=e.facing*fall*.25;scaleY*=1-.14*fall;scaleX*=1+.1*fall;e.mat.uniforms.rimStrength.value=.35;e.mat.uniforms.emission.value=.04;e.mat.uniforms.opacity.value=1-THREE.MathUtils.smoothstep(k,.78,1)*.9}
       else{bob+=pulse*.025;e.mat.uniforms.rimStrength.value=.62+e.bossPhase*.12}
-      if(e.shadow){if(grounded)e.shadowGroundY=p.y-1.02;const air=THREE.MathUtils.clamp((p.y-1.02-e.shadowGroundY)*.2,0,.5);e.shadow.position.set(p.x,e.shadowGroundY,.43);e.shadow.scale.set(1.45-air,.32-air*.12,1);e.shadow.material.opacity=.34-air*.32}
     }
+    if(e.shadow){if(grounded)e.shadowGroundY=p.y-1.02;const air=THREE.MathUtils.clamp((p.y-1.02-e.shadowGroundY)*.2,0,.5),baseScale=e.kind==='boss'?1.45:e.kind==='player'?.95:e.data?.heavy?.95:.8;e.shadow.position.set(p.x,e.shadowGroundY,.43);e.shadow.scale.set(Math.max(.25,baseScale-air*.25),.32-air*.12,1);e.shadow.material.opacity=Math.max(.08,.3-air*.3)}
 
     e.mesh.position.x=p.x+forward;e.mesh.position.y=p.y+(e.kind==='boss'?.35:.2)+bob;e.mesh.rotation.z=lean;
     e.mat.uniforms.flash.value=Math.max(0,e.mat.uniforms.flash.value-dt*8);
@@ -701,7 +701,7 @@ if(DEV_RUNTIME){
     setBossHpRatio:(ratio)=>{if(activeBoss?.alive)activeBoss.hp=activeBoss.maxHp*THREE.MathUtils.clamp(Number(ratio)||0,.01,1);return activeBoss?{hp:activeBoss.hp,phase:activeBoss.bossPhase,state:activeBoss.state}:null},
     setEnergy:(value=100)=>{if(player)player.energy=THREE.MathUtils.clamp(Number(value)||0,0,100);updateHUD();return player?.energy??0},
     start:async(index,hero='heling')=>{selectedHero=HEROES[hero]?hero:'heling';await startLevel(THREE.MathUtils.clamp(index,0,LEVELS.length-1));await enterCombat();return globalThis.__JIUZHOU_DEBUG__.snapshot()},
-    introspect:()=>entities.map(e=>({kind:e.kind,name:e.data?.name,hp:Math.round(e.hp),maxHp:e.maxHp,pos:e.body?.getPosition(),visual:[e.mesh.geometry.parameters.width,e.mesh.geometry.parameters.height],scale:{x:e.mesh.scale.x,y:e.mesh.scale.y},cell:[e.mat?.uniforms?.cell?.value?.x,e.mat?.uniforms?.cell?.value?.y],frame:e.mat?.uniforms?.cell?.value?.x+(e.mat?.uniforms?.cell?.value?.y*(e.grid?.[0]||3)),state:e.state,frozen:e.frozen||0,opacity:e.mat?.uniforms?.opacity?.value,scaleXZ:e.data?.scale}))
+    introspect:()=>entities.map(e=>({kind:e.kind,name:e.data?.name,hp:Math.round(e.hp),maxHp:e.maxHp,pos:e.body?.getPosition(),visual:[e.mesh.geometry.parameters.width,e.mesh.geometry.parameters.height],shadow:!!e.shadow,scale:{x:e.mesh.scale.x,y:e.mesh.scale.y},cell:[e.mat?.uniforms?.cell?.value?.x,e.mat?.uniforms?.cell?.value?.y],frame:e.mat?.uniforms?.cell?.value?.x+(e.mat?.uniforms?.cell?.value?.y*(e.grid?.[0]||3)),state:e.state,frozen:e.frozen||0,opacity:e.mat?.uniforms?.opacity?.value,scaleXZ:e.data?.scale}))
   };
 }
 
