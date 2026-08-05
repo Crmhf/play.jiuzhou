@@ -33,8 +33,8 @@ export class AudioEngine {
     this.loading = null;
     this.lastSample = new Map();
     this.lastPlayedAt = new Map();
-    this.music = new Audio('assets/audio/sanguo-battle-theme.mp3');
-    this.pressure = new Audio('assets/audio/sanguo-boss-pressure.mp3');
+    this.music = new Audio('assets/audio/jiuzhou-theme.mp3');
+    this.pressure = new Audio('assets/audio/jiuzhou-boss.mp3');
     for (const track of [this.music, this.pressure]) {
       track.loop = true;
       track.preload = 'auto';
@@ -163,8 +163,8 @@ export class AudioEngine {
     source.stop(t + dur);
   }
 
-  weaponSwing(hero, step = 1) {
-    const group = hero === 'guanyu' ? 'blade' : hero === 'huangzhong' ? 'bow' : 'polearm';
+  weaponSwing(hero = 'heling', step = 1) {
+    const group = hero === 'heling' ? 'polearm' : hero === 'guanyu' ? 'blade' : hero === 'huangzhong' ? 'bow' : 'polearm';
     const heavy = step === 3;
     this.sample(group, { volume: group === 'bow' ? .44 : heavy ? .42 : .31, rate: heavy ? .88 : 1.03 + step * .015, minGap: 45 });
     if (heavy && group !== 'bow') this.tone(108, .075, 'triangle', .018, .62);
@@ -185,14 +185,14 @@ export class AudioEngine {
     this.noise(.11, .045, .01);
   }
 
-  skill(hero = 'guanyu') {
+  skill(hero = 'heling') {
     const group = hero === 'huangzhong' ? 'bow' : 'skillWind';
     this.sample(group, { volume: group === 'bow' ? .46 : .4, rate: hero === 'zhangfei' ? .82 : 1, minGap: 100 });
     this.tone(270, .22, 'sawtooth', .055, 2.55);
     this.tone(620, .16, 'sine', .025, .68, .06);
   }
 
-  ultimate(hero = 'guanyu') {
+  ultimate(hero = 'heling') {
     this.sample('ultimate', { volume: .52, rate: hero === 'zhangfei' ? .82 : hero === 'zhaoyun' ? 1.13 : 1, minGap: 220 });
     this.sample('skillImpact', { volume: .3, rate: .9, delay: .08, minGap: 180 });
     this.duck = Math.max(this.duck, .58);

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-// The static build is hosted below /webgame/play-sanguo/; relative URLs keep
+// The static build is hosted below /webgame/play-jiuzhou/; relative URLs keep
 // local preview, GitHub Pages-style mirrors and the production subdirectory portable.
 export default defineConfig({
   base: './',

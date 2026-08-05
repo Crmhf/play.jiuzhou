@@ -1,9 +1,9 @@
 {
-  "name": "play-sanguo",
+  "name": "play-jiuzhou",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "三国大乱斗：Three.js + Planck.js 十关横版动作清关游戏",
+  "description": "九州灵迹：节气守护者 · Three.js + Planck.js 三关横版动作冒险 Demo",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
@@ -12,7 +12,7 @@
     "inventory:spine": "node tools/inventory-spine.mjs",
     "assets:help": "node tools/generate-assets.mjs --help",
     "assets:boss:repack": "python3 tools/repack-boss-atlases.py",
-    "assets:audio:import": "python3 tools/import-combat-audio.py \"$SANGUO_AUDIO_PACK\""
+    "assets:audio:import": "python3 tools/import-combat-audio.py \"$JIUZHOU_AUDIO_PACK\""
   },
   "dependencies": {
     "@vitejs/plugin-basic-ssl": "latest",

@@ -10,7 +10,12 @@ const add=(g,geo,mat,pos=[0,0,0],rot=[0,0,0])=>{const m=new THREE.Mesh(geo,mat);
  */
 export function buildHeroRelic(hero){
   const g=new THREE.Group(),gold=metal(0xe5a92f,0x6d3108),dark=metal(0x4d1b18),jade=metal(0x55b779,0x123c22),silver=metal(0xe7edf5,0x284c75),red=metal(0xa62b2c,0x3b0808);
-  if(hero==='guanyu'){
+  if(hero==='heling'){
+    add(g,new THREE.CylinderGeometry(.07,.1,4.8,14),dark,[0,-.15,0],[0,0,.18]);
+    add(g,new THREE.TorusGeometry(.26,.055,8,24),gold,[.55,1.88,0],[0,0,.18]);
+    const blade=new THREE.Shape();blade.moveTo(-.12,-.42);blade.quadraticCurveTo(.72,-.12,.94,.38);blade.quadraticCurveTo(.18,.78,-.26,.34);blade.closePath();
+    add(g,new THREE.ExtrudeGeometry(blade,{depth:.12,bevelEnabled:true,bevelSize:.035,bevelThickness:.035}),jade,[.62,2.05,-.06],[0,0,-.05]);
+  }else if(hero==='guanyu'){
     add(g,new THREE.CylinderGeometry(.075,.1,5.4,14),dark,[0,-.25,0],[0,0,.2]);
     add(g,new THREE.CylinderGeometry(.13,.13,.55,16),gold,[.55,2.2,0],[0,0,.2]);
     const blade=new THREE.Shape();blade.moveTo(-.12,-.55);blade.quadraticCurveTo(.75,-.18,.9,.48);blade.quadraticCurveTo(.18,.82,-.28,.42);blade.closePath();

@@ -134,7 +134,7 @@ def main() -> None:
     for name, rel in SAMPLES.items():
         convert(args.source / rel, args.output / name)
         print(f"created {args.output / name}")
-    pressure = args.output.parent / "sanguo-boss-pressure.mp3"
+    pressure = args.output.parent / "jiuzhou-boss.mp3"
     make_pressure_layer(args.output, pressure)
     print(f"created {pressure}")
 

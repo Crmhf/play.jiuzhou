@@ -9,7 +9,7 @@ import { AfterimagePass } from 'three/examples/jsm/postprocessing/AfterimagePass
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { HEROES, MONSTERS, BOSSES } from './actors.js';
-import { LEVELS } from './levels.js';
+import { LEVELS, TRAP_TYPES } from './levels.js';
 import { buildHeroRelic } from './relics.js';
 import { SpineActorBridge } from './spine-bridge.js';
 import { MythicGradeShader } from './postfx.js';
@@ -97,8 +97,9 @@ async function buildBackdrop(level=LEVELS[0]){
 function makeCloudTexture(){const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(256,64,5,256,64,240);g.addColorStop(0,'#fff');g.addColorStop(.45,'#ffffffbb');g.addColorStop(1,'#fff0');x.fillStyle=g;x.fillRect(0,0,512,128);return new THREE.CanvasTexture(c)}
 
 // Runtime state
-let state='loading', selectedHero='guanyu', levelIndex=0, level=LEVELS[0], world=null, player=null, entities=[], particles=[], projectiles=[], platforms=[], waveIndex=0, pendingSpawns=0, activeBoss=null, exitGate=null;
+let state='loading', selectedHero='heling', levelIndex=0, level=LEVELS[0], world=null, player=null, entities=[], particles=[], projectiles=[], platforms=[], waveIndex=0, pendingSpawns=0, activeBoss=null, exitGate=null;
 let cameraX=0, cameraLead=1.6, shake=0, hitStop=0, hazardTimer=3.5, accumulator=0, lastTime=performance.now(), levelStart=0;
+let worldItems=[], levelProgress={coins:0, slips:0, checkpoint:0, monumentActive:false, extinguished:0};
 let stats={kills:0,hits:0,damage:0,maxCombo:0};
 let debugBossHpRatio=1;
 const DEV_RUNTIME=import.meta.env.DEV||location.hostname==='127.0.0.1'||location.hostname==='localhost';
@@ -129,6 +130,83 @@ function makePlatform(p,level){
   // glowing edge to improve terrain readability
   const edge=new THREE.Mesh(new THREE.PlaneGeometry(p.w,.045),new THREE.MeshBasicMaterial({color:level.palette[2],transparent:true,opacity:.55,blending:THREE.AdditiveBlending}));edge.position.set(p.x,p.y+p.h/2+.025,.25);worldGroup.add(edge);
 }
+
+function itemTexture(label, fill = '#dfb857', ink = '#213c30') {
+  const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
+  x.clearRect(0,0,128,128); x.fillStyle=fill; x.beginPath(); x.roundRect(18,14,92,100,12); x.fill();
+  x.strokeStyle=ink; x.lineWidth=5; x.stroke(); x.fillStyle=ink; x.font='bold 54px serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label,64,66);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+function worldItemMesh(item){
+  let mesh;
+  if(item.kind==='coin'){
+    mesh=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,16),new THREE.MeshStandardMaterial({color:0xe8b84d,metalness:.82,roughness:.24,emissive:0x6b3a12,emissiveIntensity:.22}));
+    mesh.rotation.x=Math.PI/2;
+  }else if(item.kind==='slip'){
+    mesh=new THREE.Mesh(new THREE.PlaneGeometry(.58,.8),new THREE.MeshBasicMaterial({map:itemTexture('简','#d8b26a','#4b2a1a'),transparent:true,depthWrite:false}));
+  }else if(item.kind==='checkpoint'){
+    mesh=new THREE.Mesh(new THREE.TorusGeometry(.62,.08,10,28),new THREE.MeshBasicMaterial({color:0xc8f3b0,transparent:true,opacity:.82,blending:THREE.AdditiveBlending,depthWrite:false}));
+    mesh.rotation.x=Math.PI/2;
+  }else if(item.kind==='monument'){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.BoxGeometry(.82,1.72,.35),new THREE.MeshStandardMaterial({color:0xc5b17a,roughness:.55,metalness:.18,emissive:0x3f5a38,emissiveIntensity:.22}));
+    const top=new THREE.Mesh(new THREE.ConeGeometry(.7,.42,4),body.material); top.position.y=1.04; top.rotation.y=Math.PI/4; g.add(body,top);
+    const glyph=new THREE.Mesh(new THREE.PlaneGeometry(.46,.68),new THREE.MeshBasicMaterial({map:itemTexture('春','#f0d58a','#31583c'),transparent:true,depthWrite:false})); glyph.position.z=.22; glyph.position.y=.12; g.add(glyph); mesh=g;
+  }else if(item.kind==='trap'){
+    const spec=TRAP_TYPES[item.trapType];
+    const geo=item.trapType==='bamboo-spike'?new THREE.ConeGeometry(.22,.78,4):item.trapType==='falling-rock'?new THREE.DodecahedronGeometry(.55,0):new THREE.ConeGeometry(.35,1.15,6);
+    mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:spec.color,roughness:.68,emissive:new THREE.Color(spec.color),emissiveIntensity:item.trapType==='fire-jet'?.45:.12,transparent:true,opacity:.9}));
+    if(item.trapType==='fire-jet') mesh.rotation.z=Math.PI;
+  }
+  if(!mesh)return null;
+  mesh.position.set(item.x,item.y, item.kind==='monument'?.2:1.15); mesh.userData.item=item; worldGroup.add(mesh); item.mesh=mesh; return mesh;
+}
+function addWorldItem(item){worldItemMesh(item);worldItems.push(item);return item;}
+function buildLevelObjects(lvl){
+  // Collectibles are laid out in a readable rhythm: ground coins teach running, elevated coins teach jumping.
+  const coinXs=Array.from({length:lvl.coins},(_,i)=>10+i*((lvl.length-24)/(lvl.coins-1)));
+  coinXs.forEach((x,i)=>addWorldItem({kind:'coin',x,y:.25+(i%4===2?1.35:0),active:true,phase:i*.6}));
+  const slipXs=Array.from({length:lvl.bambooSlips},(_,i)=>26+i*((lvl.length-52)/Math.max(1,lvl.bambooSlips-1)));
+  slipXs.forEach((x,i)=>addWorldItem({kind:'slip',x,y:1.15+(i%2)*1.1,active:true,phase:i}));
+  lvl.checkpoints.forEach((x,i)=>addWorldItem({kind:'checkpoint',x,y:.4,active:true,activated:false,index:i}));
+  addWorldItem({kind:'monument',x:lvl.monument,y:.15,active:true,activated:false});
+  // Static teaching traps make each level's verb visible before the periodic hazard spawner adds pressure.
+  const trapXs=lvl.id===1?[42,101,148]:lvl.id===2?[38,96,151,198]:[48,105,160,211];
+  trapXs.forEach((x,i)=>addWorldItem({kind:'trap',trapType:lvl.hazard,x,y:lvl.hazard==='falling-rock'?2.65:.02,active:true,cooldown:0,phase:i}));
+}
+function spawnTrap(x,y,trapType){
+  addWorldItem({kind:'trap',trapType,x,y,active:true,cooldown:0,phase:Math.random()*6});
+}
+function extinguishFire(x,y,range){
+  let count=0;
+  worldItems.forEach(item=>{if(item.kind==='trap'&&item.trapType==='fire-jet'&&item.active&&Math.abs(item.x-x)<range&&Math.abs(item.y-y)<3){item.active=false;item.mesh.visible=false;count++;levelProgress.extinguished++;ringFx(item.x,item.y,'#93f5eb',1.3);burst(item.x,item.y,'#b8fff1',18,7)}});
+  if(count){audio.tone(520,.16,'sine',.05,1.5);toast(`水灵灭火 · 已关闭 ${levelProgress.extinguished} 处机关`)}
+}
+function processWorldInteractions(dt){
+  if(!player?.alive)return; const p=player.body.getPosition();
+  worldItems.forEach(item=>{
+    if(!item.active)return;
+    item.phase=(item.phase||0)+dt;
+    if(item.kind==='coin'||item.kind==='slip'){
+      if(Math.abs(p.x-item.x)<.78&&Math.abs(p.y-item.y)<1.35){item.active=false;item.mesh.visible=false;if(item.kind==='coin'){levelProgress.coins++;player.energy=Math.min(100,player.energy+2);audio.tone(720,.07,'sine',.04,1.6);burst(item.x,item.y,'#ffd66d',10,4);toast(`铜钱 +1 · ${levelProgress.coins}/${level.coins}`)}else{levelProgress.slips++;player.energy=Math.min(100,player.energy+6);audio.tone(860,.12,'triangle',.05,1.35);burst(item.x,item.y,'#e3d29a',16,5);toast(`竹简已收 · ${levelProgress.slips}/${level.bambooSlips}`)}}
+    }else if(item.kind==='checkpoint'){
+      item.mesh.rotation.z=Math.sin(item.phase*2)*.1;
+      if(!item.activated&&Math.abs(p.x-item.x)<1.15&&Math.abs(p.y-item.y)<1.8){item.activated=true;levelProgress.checkpoint=Math.max(levelProgress.checkpoint,item.index+1);item.mesh.material.color.set('#fff0a8');item.mesh.material.opacity=1;ringFx(item.x,item.y,'#eaffb0',2.1);audio.tone(620,.28,'sine',.07,1.85);toast(`节气碑 ${item.index+1} · 检查点已激活`)}
+    }else if(item.kind==='monument'){
+      item.mesh.rotation.y+=dt*.2;
+      if(!item.activated&&Math.abs(p.x-item.x)<1.4&&Math.abs(p.y-item.y)<2.2){item.activated=true;levelProgress.monumentActive=true;item.mesh.children?.forEach(m=>{if(m.material?.emissive)m.material.emissive.set('#8fdb91');});ringFx(item.x,item.y,'#e7f8b0',3.1);burst(item.x,item.y+1,'#c7ed91',38,8);audio.tone(880,.38,'sine',.09,1.9);toast(`${level.season} 节气碑已激活 · 灵迹共鸣`)}
+    }else if(item.kind==='trap'){
+      item.mesh.position.y=item.y+(item.trapType==='falling-rock'?Math.sin(item.phase*3)*.1:0);
+      item.mesh.rotation.z+=dt*(item.trapType==='falling-rock'?1.5:0);
+      if(item.cooldown>0){item.cooldown-=dt;return}
+      const width=TRAP_TYPES[item.trapType]?.width||1.2;
+      if(Math.abs(p.x-item.x)<width&&Math.abs(p.y-item.y)<1.35){
+        item.cooldown=item.trapType==='fire-jet'?1.4:1.05;damage(player,TRAP_TYPES[item.trapType].damage,null,item.trapType==='falling-rock'?2:1);ringFx(item.x,item.y,TRAP_TYPES[item.trapType].color,1.2);audio.tone(item.trapType==='fire-jet'?130:90,.12,'sawtooth',.035,.4);
+      }
+    }
+  });
+}
+
 async function makeActor(kind,data,x,y){
   const isPlayer=kind==='player', isBoss=kind==='boss';
   const body=world.createDynamicBody({position:planck.Vec2(x,y),fixedRotation:true,allowSleep:false,bullet:isPlayer});
@@ -152,11 +230,14 @@ async function startLevel(index){
 }
 async function enterCombat(){
   relicGroup.visible=false;showScreen(null);root.classList.add('playing');state='preparing';audio.setBoss(false);audio.start('combat');
-  worldGroup.clear();fxGroup.clear();entities=[];particles=[];projectiles=[];platforms=[];waveIndex=0;pendingSpawns=0;activeBoss=null;stats={kills:0,hits:0,damage:0,maxCombo:0};
-  world=new planck.World(planck.Vec2(0,-30));setupContacts();level.platforms.forEach(p=>makePlatform(p,level));
+  worldGroup.clear();fxGroup.clear();entities=[];particles=[];projectiles=[];platforms=[];worldItems=[];levelProgress={coins:0,slips:0,checkpoint:0,monumentActive:false,extinguished:0};waveIndex=0;pendingSpawns=0;activeBoss=null;stats={kills:0,hits:0,damage:0,maxCombo:0};
+  world=new planck.World(planck.Vec2(0,-30));setupContacts();level.platforms.forEach(p=>makePlatform(p,level));buildLevelObjects(level);
   player=await makeActor('player',HEROES[selectedHero],-7,.8);player.hp=Math.min(player.maxHp,player.maxHp);player.jumps=0;player.coyote=0;player.jumpBuffer=0;
   camera.position.x=0;camera.position.y=4.0;cameraX=0;hazardTimer=Math.max(2.8,level.hazardInterval*.72);levelStart=performance.now();state='playing';lastTime=performance.now();
-  ui.hudName.textContent=player.data.name;ui.avatar.textContent=player.data.name[0];ui.levelName.textContent=`${level.name} · ${level.difficulty}`;ui.levelNo.textContent=`第${cnNums[levelIndex]}战`;
+  ui.hudName.textContent=player.data.name;
+  ui.avatar.textContent=player.data.name[0];
+  ui.avatar.parentElement.style.setProperty('--hero-portrait',`url(${new URL(`assets/portraits/${selectedHero}.webp`,document.baseURI).href})`);
+  ui.levelName.textContent=`${level.name} · ${level.difficulty}`;ui.levelNo.textContent=`第${cnNums[levelIndex]}战`;
   ui.k.querySelector('span').textContent=player.data.skill;ui.l.querySelector('span').textContent=player.data.ultimate;ui.bossHud.classList.remove('show');toast(level.objective);
 }
 
@@ -172,25 +253,8 @@ async function spawnBoss(data,x){activeBoss=await makeActor('boss',data,x,1.3);i
 function aliveEnemies(){return entities.filter(e=>e.alive&&e.kind!=='player')}
 
 const HERO_COMBAT_CALLS={
-  guanyu:{skill:['拖刀偃月 · 青龙回首','刀光过处，万军失色'],ultimate:['武圣·青龙降世','青龙破阵，万军避锋']},
-  zhangfei:{skill:['当阳怒吼 · 百骑震岳','一声断喝，敌胆俱裂'],ultimate:['燕人·雷霆万军','雷霆一喝，百战皆惊']},
-  zhaoyun:{skill:['七探盘蛇 · 龙胆穿云','银枪七进，破阵如风'],ultimate:['常胜·龙魂千影','龙魂七进，百战无归']},
-  huangzhong:{skill:['百步穿杨 · 破军点将','箭出如星，穿云夺魄'],ultimate:['定军·落日箭阵','落日穿云，箭雨定军']}
+  heling:{skill:['水灵·润泽 · 清泉回春','水行其道，火焰退散'],ultimate:['春木·万物生','五行初醒，灵迹归位']}
 };
-function showCombatCallout(type,title,subtitle,accent='#f7c85c'){
-  if(!ui.callout)return;const [small,strong,span]=ui.callout.children;
-  small.textContent=type==='ultimate'?'ULTIMATE · 绝世奥义':type==='skill'?'SKILL · 武将绝学':'COMBO · 连环出招';strong.textContent=title;span.textContent=subtitle;ui.callout.style.setProperty('--callout-accent',accent);ui.callout.dataset.type=type;ui.callout.classList.remove('show');void ui.callout.offsetWidth;ui.callout.classList.add('show');clearTimeout(showCombatCallout.timer);showCombatCallout.timer=setTimeout(()=>ui.callout.classList.remove('show'),type==='ultimate'?1900:1200);
-}
-function beginPlayerAction(kind,duration,phase=kind){
-  player.state=kind;player.stateTime=0;player.actionPhase=phase;player.actionDuration=duration;player.actionSerial++;player.actionTrailTimer=0;player.actionImpactDone=false;return player.actionSerial;
-}
-function actionFrames(frames,phase){const value=frames?.[phase];return Array.isArray(value)?value:[value??frames?.attack??frames?.idle??0]}
-function heroAfterimage(e,opacity=.2){
-  if(!canUseMotionBlur&&innerWidth<800)return;const mat=e.mat.clone();mat.uniforms.opacity.value=opacity;mat.uniforms.flash.value=.08;const ghost=new THREE.Mesh(e.mesh.geometry,mat);ghost.position.copy(e.mesh.position);ghost.rotation.copy(e.mesh.rotation);ghost.scale.copy(e.mesh.scale);ghost.renderOrder=2;fxGroup.add(ghost);particles.push({mesh:ghost,vx:-e.facing*.35,vy:.05,life:.16,max:.16,heroGhost:true});
-}
-function impactFx(x,y,color,dir=1,strength=1){
-  const s=Math.min(2.2,strength);ringFx(x,y,color,.55*s,.24);slashFx(x+dir*.12,y+.18,color,dir,.62*s);burst(x+dir*.22,y,color,Math.round(10+8*s),4.5+2*s);
-}
 function damage(target,amount,source,force=5){
   if(!target?.alive||target.dying||target.invuln>0)return false;
   if(target.kind==='player'&&target.shield>0){const used=Math.min(target.shield,amount*.65);target.shield-=used;amount-=used}
@@ -200,7 +264,7 @@ function damage(target,amount,source,force=5){
   const tp=target.body.getPosition(), dir=source?.body?Math.sign(tp.x-source.body.getPosition().x):1, impact=target.kind==='boss'?.18:1;
   target.body.applyLinearImpulse(planck.Vec2(dir*force*impact,2.2*impact),target.body.getWorldCenter(),true);
   target.mat.uniforms.flash.value=Math.max(target.mat.uniforms.flash.value,.58);burst(tp.x,tp.y,target.kind==='player'?'#ff3c4f':'#ffd267',target.kind==='boss'?28:14,target.kind==='boss'?7:4);if(target.kind!=='player')impactFx(tp.x,tp.y,target.data.color||'#ffd267',dir,target.kind==='boss'?1.55:1);if(source===player){hitStop=Math.max(hitStop,target.kind==='boss'?.105:.055);if(target.kind==='boss')showCombatCallout('impact',`${target.data.name} · 破绽`,amount>player.data.attack*1.3?'重击贯体':'刀锋入骨',target.data.color||player.data.accent)}if(target.kind==='player')audio.hurt();else audio.hit(target.kind==='boss'?1.55:1,target.kind==='boss'||Boolean(target.data.heavy));shake=Math.min(1.2,shake+.18);
-  if(source===player){stats.hits++;stats.damage+=Math.round(amount);player.combo++;player.comboTimer=2.1;player.energy=Math.min(100,player.energy+5+(target.kind==='boss'?2:0));stats.maxCombo=Math.max(stats.maxCombo,player.combo);if(selectedHero==='guanyu'&&player.combo>10)player.shield=Math.min(24,player.shield+1.1);if(selectedHero==='zhangfei'&&player.hp/player.maxHp<.35)player.invuln=Math.max(player.invuln,.22)}
+  if(source===player){stats.hits++;stats.damage+=Math.round(amount);player.combo++;player.comboTimer=2.1;player.energy=Math.min(100,player.energy+5+(target.kind==='boss'?2:0));stats.maxCombo=Math.max(stats.maxCombo,player.combo);if(selectedHero==='heling'&&player.combo>8)player.shield=Math.min(26,player.shield+1.2)}
   if(target.hp<=0){kill(target,source)} return true;
 }
 function kill(target,source){
@@ -224,7 +288,8 @@ function attack(){
   setTimeout(()=>{
     if(state!=='playing'||!player?.alive||player.actionSerial!==serial)return;
     const q=player.body.getPosition(),power=player.data.attack*mult*(step===3?1.55:1);
-    if(selectedHero==='huangzhong'){
+    if(selectedHero==='none'){
+
       spawnProjectile(q.x+player.facing*.9,q.y+.45,'#ffd45f',player.facing*(15+step*1.5),step===3?1.4:.3,power,player,'arrow');
       slashFx(q.x+player.facing*.9,q.y+.4,'#ffc956',player.facing,step===3?1.05:.72);impactFx(q.x+player.facing*1.05,q.y+.4,'#ffc956',player.facing,step===3?1.3:.8);
       if(step===3){hitStop=.08;shake=.72}
@@ -236,35 +301,36 @@ function attack(){
 }
 function skill(){
   if(player.skillCd>0||!player.alive)return;
-  const p=player.body.getPosition(),cd=player.data.skillCd*(1-upgrades.cooldown*.06);player.skillCd=cd;const serial=beginPlayerAction('skill',player.data.motion?.skill??.8,'skill');player.actionFrames=actionFrames(player.data.frames,'skill');audio.skill(selectedHero);
-  const call=HERO_COMBAT_CALLS[selectedHero]?.skill;showCombatCallout('skill',call?.[0]||player.data.skill,call?.[1]||'绝学出鞘，破阵夺魄',player.data.accent);shake=.55;
-  if(selectedHero==='guanyu'){
-    player.invuln=.45;player.body.setLinearVelocity(planck.Vec2(player.facing*11,2));
-    for(let n=0;n<3;n++)setTimeout(()=>{if(player.actionSerial!==serial||state!=='playing')return;const q=player.body.getPosition();const hits=hitArea(q.x+player.facing*1.6,q.y,4.1,player.data.attack*.9,10+n*2);slashFx(q.x+player.facing*1.2,q.y+.3,'#71e784',player.facing,1.2+n*.18);if(hits){hitStop=.065;impactFx(q.x+player.facing*1.6,q.y,'#71e784',player.facing,1.05)}},n*115);
-  }
-  if(selectedHero==='zhangfei'){
-    ringFx(p.x,p.y,'#ff9a55',3.4);shake=1.1;hitStop=.08;
-    entities.forEach(e=>{if(e.alive&&e.kind!=='player'&&Math.abs(e.body.getPosition().x-p.x)<7){damage(e,player.data.attack*1.35,player,15);e.attackCd+=1.1}});
-  }
-  if(selectedHero==='zhaoyun'){
-    player.invuln=.72;player.body.setTransform(planck.Vec2(Math.min(level.length,p.x+player.facing*5.8),p.y+1),0);
-    for(let n=0;n<4;n++)setTimeout(()=>{if(player.actionSerial!==serial||state!=='playing')return;const q=player.body.getPosition();const hits=hitArea(q.x+player.facing*(n*.55),q.y,4.7,player.data.attack*.72,8);burst(q.x,q.y,'#8bdcff',22,10);if(hits){hitStop=.05;impactFx(q.x,q.y,'#8bdcff',player.facing,.9)}},n*70);
-  }
-  if(selectedHero==='huangzhong'){
-    for(let n=-2;n<=2;n++)spawnProjectile(p.x+player.facing,p.y+.55,'#ffb23e',player.facing*(16+Math.abs(n)),n*1.2,player.data.attack*1.25,player,'arrow');
-    shake=.72;ringFx(p.x+player.facing*1.2,p.y+.4,'#ffd55d',2.2);
-  }
+  const p=player.body.getPosition(),cd=player.data.skillCd*(1-upgrades.cooldown*.06);
+  player.skillCd=cd;const serial=beginPlayerAction('skill',player.data.motion?.skill??.8,'skill');
+  player.actionFrames=actionFrames(player.data.frames,'skill');audio.skill(selectedHero);
+  const call=HERO_COMBAT_CALLS.heling.skill;showCombatCallout('skill',call[0],call[1],player.data.accent);shake=.55;
+  player.invuln=.42;
+  // 水灵既是攻击技，也是第三关的机关钥匙：按 K 可灭掉视野内的火焰机关。
+  extinguishFire(p.x, p.y, 7);
+  for(let n=0;n<3;n++)setTimeout(()=>{
+    if(player.actionSerial!==serial||state!=='playing')return;
+    const q=player.body.getPosition();const hits=hitArea(q.x+player.facing*1.5,q.y,3.9,player.data.attack*.92,10+n*2);
+    slashFx(q.x+player.facing*1.2,q.y+.3,'#7be1e8',player.facing,1.15+n*.15);
+    burst(q.x+player.facing*.8,q.y+.2,'#a5f4e8',14,6);
+    if(hits){hitStop=.06;impactFx(q.x+player.facing*1.6,q.y,'#b8fff1',player.facing,1.05)}
+  },n*115);
 }
 function ultimate(){
   if(player.energy<100||!player.alive)return;
-  player.energy=0;const serial=beginPlayerAction('ultimate',player.data.motion?.ultimate??1.2,'ultimate');player.actionFrames=actionFrames(player.data.frames,'ultimate');hitStop=.18;shake=1.55;ui.flash.style.background=player.data.color;ui.flash.style.opacity=.52;setTimeout(()=>ui.flash.style.opacity=0,90);audio.ultimate(selectedHero);
-  const call=HERO_COMBAT_CALLS[selectedHero]?.ultimate;showCombatCallout('ultimate',call?.[0]||player.data.ultimate,call?.[1]||'绝技降世，万军退避',player.data.accent);
+  player.energy=0;const serial=beginPlayerAction('ultimate',player.data.motion?.ultimate??1.2,'ultimate');
+  player.actionFrames=actionFrames(player.data.frames,'ultimate');hitStop=.18;shake=1.55;
+  ui.flash.style.background=player.data.color;ui.flash.style.opacity=.52;setTimeout(()=>ui.flash.style.opacity=0,90);audio.ultimate(selectedHero);
+  const call=HERO_COMBAT_CALLS.heling.ultimate;showCombatCallout('ultimate',call[0],call[1],player.data.accent);
   const p=player.body.getPosition();
-  if(selectedHero==='guanyu')for(let i=0;i<7;i++)setTimeout(()=>{if(state!=='playing'||player.actionSerial!==serial)return;const x=p.x+(i-3)*2.2;hitArea(x,p.y,2.8,player.data.attack*1.42,14);burst(x,p.y,'#63e582',32,13);slashFx(x,p.y+.35,'#c4ff95',i<3?-1:1,1.5);impactFx(x,p.y,'#c4ff95',i<3?-1:1,1.15)},i*80);
-  if(selectedHero==='zhangfei'){ringFx(p.x,p.y,'#ffbd53',6);hitArea(p.x,p.y,10,player.data.attack*5.2,24);for(let i=0;i<8;i++)setTimeout(()=>{if(state!=='playing'||player.actionSerial!==serial)return;ringFx(p.x,p.y,'#ff6a42',1+i*.7)},i*45)}
-  if(selectedHero==='zhaoyun'){for(let i=0;i<70;i++){const a=Math.random()*Math.PI*2,r=Math.random()*9;spawnParticle(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r,'#a9edff',13)}for(let i=0;i<6;i++)setTimeout(()=>{if(state!=='playing'||player.actionSerial!==serial)return;hitArea(p.x+(i-2.5)*2.6,p.y,3.4,player.data.attack*1.25,15);slashFx(p.x+(i-2.5)*2.6,p.y+.4,'#d7f5ff',i%2?1:-1,1.3);impactFx(p.x+(i-2.5)*2.6,p.y,'#d7f5ff',i%2?1:-1,1.15)},i*70)}
-  if(selectedHero==='huangzhong')for(let i=0;i<28;i++)setTimeout(()=>{if(state!=='playing'||player.actionSerial!==serial)return;const x=p.x-8+Math.random()*18;spawnProjectile(x,p.y+8,'#ffd04e',(Math.random()-.5)*2,-14-Math.random()*4,player.data.attack*.78,player,'arrow');if(i%4===0){ringFx(x,p.y,'#ff8c39',1.3);impactFx(x,p.y,'#ffca52',Math.random()<.5?-1:1,.8)}},i*38);
+  for(let i=0;i<9;i++)setTimeout(()=>{
+    if(state!=='playing'||player.actionSerial!==serial)return;
+    const x=p.x+(i-4)*2.1;hitArea(x,p.y,2.7,player.data.attack*1.48,14);
+    burst(x,p.y,'#b8ed8c',24,11);slashFx(x,p.y+.35,'#e8ffae',i<4?-1:1,1.35);impactFx(x,p.y,'#d9ff9d',i<4?-1:1,1.05);
+  },i*70);
+  extinguishFire(p.x,p.y,12);
 }
+
 function dash(){
   if(player.dashCd>0||!player.alive)return;const p=player.body.getPosition();player.dashCd=.78;player.invuln=.28;player.moveLock=.18;beginPlayerAction('skill',.28,'dash');player.actionFrames=actionFrames(player.data.frames,'skill');player.body.setLinearVelocity(planck.Vec2(player.facing*15,Math.max(1.2,player.body.getLinearVelocity().y)));slashFx(p.x+player.facing*.8,p.y+.15,'#fff0b5',player.facing,.9);burst(p.x,p.y,'#e8d083',16,7);audio.dash();
 }
@@ -283,7 +349,7 @@ function updatePlayer(dt){
     player.state=player.ground?(moveRatio>.68?'run':moveRatio>.08?'walk':'idle'):'jump';
   }
 }
-const BOSS_ACTION_NAMES={
+const BOSS_ACTION_NAMES={thunderwood:['木魈·裂枝','春雷·震泽','万藤·天坠'],
   slam:['裂阵重斩','黄天震地','乱石飞芒'],charge:['西凉重斩','铁骑冲阵','飞刃破关'],wind:['无双重斩','方天罡风','无双飞戟'],poison:['独目重斩','毒雾爆发','毒矢连环'],gourd:['曹军重斩','虎豹冲阵','铁壁飞矛'],fire:['虎痴重斩','烈焰震地','火石崩阵'],web:['锦帆重斩','锁链冲阵','水刃飞袭'],roar:['定军重斩','虎啸震地','落日箭雨'],bell:['业火重斩','烽火震地','烈焰飞袭'],lotus:['鬼谋重斩','星莲秘术','星落莲阵']
 };
 function bossActionLabel(e){return BOSS_ACTION_NAMES[e.data.pattern]?.[Math.max(0,e.bossAction)]||['裂阵重斩','秘术爆发','乱军飞芒'][Math.max(0,e.bossAction)]}
@@ -298,13 +364,13 @@ function beginBossPhase(e,phase){
 }
 function beginBossAttack(e){
   const p=e.body.getPosition(),pp=player.body.getPosition();e.activeAttack=true;e.state='windup';e.stateTime=0;e.attackTargetX=pp.x;e.attackOriginX=p.x;e.attackFacing=Math.sign(pp.x-p.x)||e.facing;e.facing=e.attackFacing;e.bossAction=(e.bossAction+1)%3;e.bossHit=false;e.bossTrailTimer=0;e.bossPatternFired=false;
-  const pat=e.data.pattern,isHeavy=e.bossAction===1&&['slam','roar','bell','fire'].includes(pat),isCharge=e.bossAction===1&&['charge','gourd','web'].includes(pat);
+  const pat=e.data.pattern,isHeavy=e.bossAction===1&&['slam','roar','bell','fire','thunderwood'].includes(pat),isCharge=e.bossAction===1&&['charge','gourd','web'].includes(pat);
   e.windupDuration=Math.max(.32,(e.bossAction===2?.7:isHeavy?.66:isCharge?.56:.46)-e.bossPhase*.055);e.activeDuration=isCharge?.5:e.bossAction===0?.3:.36;e.recoverDuration=isHeavy?.46:isCharge?.4:e.bossAction===2?.42:.32;e.attackCd=Math.max(.72,1.55-e.bossPhase*.17);
   e.body.setLinearVelocity(planck.Vec2(isCharge?-e.facing*1.8:0,Math.max(0,e.body.getLinearVelocity().y)));
   const tellScale=e.bossAction===2?2.15:isHeavy?2.7:isCharge?1.65:1.25;ringFx(p.x+e.facing*(isCharge?2.2:1.1),p.y-.45,e.data.color,tellScale,e.windupDuration+.14);burst(p.x+e.facing*.65,p.y+.3,e.data.color,10+e.bossPhase*3,4);audio.enemyWindup(true);
 }
 function executeBossAttack(e){
-  if(!e.alive||state!=='playing')return;e.state='attack';e.stateTime=0;e.facing=e.attackFacing||e.facing;const p=e.body.getPosition(),pat=e.data.pattern,isCharge=e.bossAction===1&&['charge','gourd','web'].includes(pat),isHeavy=e.bossAction===1&&['slam','roar','bell','fire'].includes(pat);
+  if(!e.alive||state!=='playing')return;e.state='attack';e.stateTime=0;e.facing=e.attackFacing||e.facing;const p=e.body.getPosition(),pat=e.data.pattern,isCharge=e.bossAction===1&&['charge','gourd','web'].includes(pat),isHeavy=e.bossAction===1&&['slam','roar','bell','fire','thunderwood'].includes(pat);
   const lunge=isCharge?12.5+e.bossPhase*2.1:isHeavy?2.4:e.bossAction===2?1.25:8.1+e.bossPhase*1.45;
   e.body.setLinearVelocity(planck.Vec2(e.facing*lunge,isHeavy?5.2:Math.max(.8,e.body.getLinearVelocity().y)));audio.enemyAttack(true);shake=Math.min(1.5,shake+(isHeavy?.75:.5));
 }
@@ -326,7 +392,7 @@ function updateBossAction(e,dt,p,pp){
     if(e.stateTime>=e.windupDuration)executeBossAttack(e);return true;
   }
   if(e.state==='attack'){
-    e.facing=e.attackFacing||e.facing;const isCharge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),isHeavy=e.bossAction===1&&['slam','roar','bell','fire'].includes(e.data.pattern),hitAt=e.activeDuration*(isCharge?.06:isHeavy?.48:e.bossAction===0?.36:.22);
+    e.facing=e.attackFacing||e.facing;const isCharge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),isHeavy=e.bossAction===1&&['slam','roar','bell','fire','thunderwood'].includes(e.data.pattern),hitAt=e.activeDuration*(isCharge?.06:isHeavy?.48:e.bossAction===0?.36:.22);
     if(!e.bossPatternFired&&e.stateTime>=hitAt){e.bossPatternFired=true;bossPattern(e,e.bossAction,e.bossPhase)}
     if(isCharge){e.bossTrailTimer-=dt;if(e.bossTrailTimer<=0){e.bossTrailTimer=.07;footstepFx(p.x-e.facing*.7,p.y-1.05,e.facing,true);burst(p.x-e.facing*.65,p.y-.45,e.data.color,4,4)}if(!e.bossHit&&Math.abs(pp.x-p.x)<1.75&&Math.abs(pp.y-p.y)<2.5){e.bossHit=damage(player,e.data.attack*(.78+e.bossPhase*.08),e,15+e.bossPhase*2)}if(boundaryHit){e.state='recover';e.stateTime=0;e.recoverDuration=Math.max(e.recoverDuration,.52);e.body.setLinearVelocity(planck.Vec2(-e.facing*1.25,1.4));ringFx(p.x,p.y-.55,e.data.color,2.4);burst(p.x,p.y-.2,e.data.color,24,7);audio.bossImpact();shake=1.05;return true}}
     if(e.stateTime>e.activeDuration){e.state='recover';e.stateTime=0}return true;
@@ -376,7 +442,7 @@ function bossPattern(e,action=0,phase=1){const p=e.body.getPosition(),pp=player.
   if(action===0){
     slashFx(p.x+e.facing*1.75,p.y+.35,col,e.facing,1.65+phase*.18);burst(p.x+e.facing*1.4,p.y+.35,col,20+phase*5,8);
     if(Math.abs(pp.x-p.x)<4.1+phase*.35&&Math.abs(pp.y-p.y)<2.8)damage(player,e.data.attack*(.82+phase*.1),e,12+phase*2);
-  }else if(action===1&&['slam','roar','bell','fire'].includes(pat)){
+  }else if(action===1&&['slam','roar','bell','fire','thunderwood'].includes(pat)){
     ringFx(p.x,p.y,col,3.5+phase*.55);if(Math.abs(pp.x-p.x)<5.4+phase*.55)damage(player,e.data.attack*(.55+phase*.1),e,11+phase);
   }else if(action===1&&['charge','gourd','web'].includes(pat)){
     slashFx(p.x+e.facing*1.1,p.y+.15,col,e.facing,1.05+phase*.12);burst(p.x,p.y,col,26+phase*4,9);
@@ -386,29 +452,20 @@ function bossPattern(e,action=0,phase=1){const p=e.body.getPosition(),pp=player.
   }
 }
 function updateHazard(dt){
-  hazardTimer-=dt;if(hazardTimer>0||!player?.alive)return;hazardTimer=level.hazardInterval+Math.random()*2.4;const p=player.body.getPosition(),h=level.hazard,col=level.palette[0];
-  if(h==='rockfall'){
-    toast('落石预警！');for(let i=0;i<5;i++)spawnProjectile(p.x-4+i*2,p.y+7,'#e4a75e',(Math.random()-.5)*2,-3,7,null)
-  }else if(h==='battle-fog'){
-    toast('战雾蔽目');scene.fog.density=.06;setTimeout(()=>scene.fog.density=.013,1800)
-  }else if(h==='gale'){
-    toast('方天戟风');player.body.applyLinearImpulse(planck.Vec2(-15,3),player.body.getWorldCenter(),true);burst(p.x,p.y,col,28,9)
-  }else if(h==='pursuit'){
-    toast('追兵冲阵 · 跃起闪避');for(let i=0;i<6;i++)spawnProjectile(p.x+10+i*1.5,p.y+.25,'#55e6bd',-11-i*.45,.6,7,null)
-  }else if(h==='fire-arrows'){
-    toast('火箭雨 · 留意落点');for(let i=0;i<7;i++)spawnProjectile(p.x-6+i*2,p.y+8+Math.random()*2,'#ff8b39',(Math.random()-.5)*1.4,-5-Math.random()*2,8,null,'arrow')
-  }else if(h==='rolling-logs'){
-    toast('峡谷滚木！');for(let i=0;i<4;i++)setTimeout(()=>{if(state==='playing'&&player?.alive)spawnProjectile(player.body.getPosition().x+11,player.body.getPosition().y+.25,'#b56b32',-9-i*.7,1.1,9,null)},i*180)
-  }else if(h==='chain-trap'){
-    toast('锁链刀阵 · 速度受限');const v=player.body.getLinearVelocity();player.body.setLinearVelocity(planck.Vec2(v.x*.2,v.y*.35));ringFx(p.x,p.y,'#d467ff',2)
-  }else if(h==='cavalry-charge'){
-    toast('西凉铁骑冲阵');for(let i=0;i<7;i++)spawnProjectile(p.x+11+i*1.25,p.y+.3,'#7ee27d',-12-i*.4,1,8,null)
-  }else if(h==='wildfire'){
-    toast('夷陵火势蔓延 · 离开火点');for(let i=-3;i<=3;i++){const x=p.x+i*1.9;ringFx(x,p.y-.4,'#ff8a35',.8);setTimeout(()=>{if(state==='playing')spawnProjectile(x,p.y-1,'#ff4b2f',0,8+Math.random()*2,8,null)},420)}
-  }else if(h==='formation-barrage'){
-    toast('八阵图 · 星落箭阵');const marks=Array.from({length:7},(_,i)=>p.x-6+i*2);marks.forEach(x=>ringFx(x,p.y-.4,'#b54cff',.75));setTimeout(()=>{if(state!=='playing')return;marks.forEach(x=>spawnProjectile(x,p.y+8,'#c57aff',(Math.random()-.5)*1.2,-7,9,null,'arrow'))},520)
+  hazardTimer-=dt;if(hazardTimer>0||!player?.alive)return;
+  hazardTimer=level.hazardInterval+Math.random()*2.4;
+  const p=player.body.getPosition(),h=level.hazard,col=level.palette[0];
+  if(h==='bamboo-spike'){
+    toast('竹刺显形 · 跳跃越过');spawnTrap(p.x+4.5,p.y-.88,'bamboo-spike');
+  }else if(h==='falling-rock'){
+    toast('落石预警 · 留意雷纹');for(let i=0;i<3;i++)spawnTrap(p.x+3+i*2.3,p.y+5.8,'falling-rock');
+  }else if(h==='fire-jet'){
+    toast('火焰机关 · 使用水灵灭火');spawnTrap(p.x+4.2,p.y-.75,'fire-jet');
+  }else{
+    burst(p.x,p.y,col,18,8);
   }
 }
+
 function updateWaves(){if(waveIndex>=level.waves.length)return;const wave=level.waves[waveIndex],p=player.body.getPosition(),living=aliveEnemies();if(p.x>=wave.at&&living.length===0&&pendingSpawns===0){spawnWave(wave);waveIndex++}if((living.length||pendingSpawns>0)&&waveIndex>0){const gate=level.waves[waveIndex-1].at+8;if(p.x>gate)player.body.setTransform(planck.Vec2(gate,p.y),0)}}
 
 function spawnProjectile(x,y,color,vx,vy,damageAmount,owner,shape='orb'){
@@ -471,7 +528,7 @@ function animateEntities(t,dt){entities.forEach(e=>{
       const pulse=Math.sin(t*(2.2+e.bossPhase*.45));e.mat.uniforms.emission.value=.07+e.bossPhase*.025;
       if(e.state==='intro'){const k=THREE.MathUtils.clamp(e.stateTime/.9,0,1),land=e.phaseImpactDone?Math.sin(Math.min(1,(e.stateTime-.35)*7)*Math.PI):0;scaleX*=1+.13*land;scaleY*=1-.12*land;bob+=Math.sin(k*Math.PI)*.2;e.mat.uniforms.rimStrength.value=1.45;e.mat.uniforms.emission.value=.22}
       else if(e.state==='windup'){
-        const k=THREE.MathUtils.clamp(e.stateTime/Math.max(.1,e.windupDuration),0,1),charge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),heavy=e.bossAction===1&&['slam','roar','bell','fire'].includes(e.data.pattern);
+        const k=THREE.MathUtils.clamp(e.stateTime/Math.max(.1,e.windupDuration),0,1),charge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),heavy=e.bossAction===1&&['slam','roar','bell','fire','thunderwood'].includes(e.data.pattern);
         if(e.bossAction===2){bob+=k*.34+Math.sin(e.stateTime*20)*.025;scaleX*=1-.05*k;scaleY*=1+.08*k;lean+=e.facing*.04*k}
         else if(charge){bob-=k*.12;forward-=e.facing*.22*k;scaleX*=1+.08*k;scaleY*=1-.13*k;lean+=e.facing*.12*k}
         else if(heavy){bob+=k*.3;scaleX*=1-.11*k;scaleY*=1+.18*k;lean+=-e.facing*.055*k}
@@ -479,7 +536,7 @@ function animateEntities(t,dt){entities.forEach(e=>{
         e.mat.uniforms.rimStrength.value=.7+k*1.6;e.mat.uniforms.emission.value=.12+k*.3;
       }
       else if(e.state==='attack'){
-        const k=THREE.MathUtils.clamp(e.stateTime/Math.max(.1,e.activeDuration),0,1),snap=Math.sin(k*Math.PI),charge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),heavy=e.bossAction===1&&['slam','roar','bell','fire'].includes(e.data.pattern);
+        const k=THREE.MathUtils.clamp(e.stateTime/Math.max(.1,e.activeDuration),0,1),snap=Math.sin(k*Math.PI),charge=e.bossAction===1&&['charge','gourd','web'].includes(e.data.pattern),heavy=e.bossAction===1&&['slam','roar','bell','fire','thunderwood'].includes(e.data.pattern);
         if(charge){scaleX*=1.2+.08*snap;scaleY*=.86;forward+=e.facing*.32;lean+=-e.facing*.16}
         else if(heavy){scaleX*=1+.18*snap;scaleY*=1-.2*snap;bob-=.12*snap;lean+=-e.facing*.08*snap}
         else if(e.bossAction===2){scaleX*=1+.12*snap;scaleY*=1+.08*snap;bob+=.18*snap;lean+=-e.facing*.035}
@@ -515,23 +572,23 @@ function animateEntities(t,dt){entities.forEach(e=>{
     e.mesh.scale.set(e.facing*artFacing*scaleX,scaleY,1);
     e.mat.uniforms.cell.value.set(frame%e.grid[0],Math.floor(frame/e.grid[0]));
   })}
-function updateHUD(){if(!player)return;if(DEV_RUNTIME)root.dataset.qaState=JSON.stringify({state,level:level?.id,length:level?.length,waveIndex,pendingSpawns,x:Number(player.body.getPosition().x.toFixed(2)),y:Number(player.body.getPosition().y.toFixed(2)),facing:player.facing,moveState:player.state,alive:aliveEnemies().length,boss:activeBoss?.data?.name||'',bossState:activeBoss?.state||'',bossPhase:activeBoss?.bossPhase||0,bossAction:activeBoss?bossActionLabel(activeBoss):'',bossX:activeBoss?Number(activeBoss.body.getPosition().x.toFixed(2)):0,bossAt:level?.waves?.at(-1)?.at||0});ui.hp.style.width=`${Math.max(0,player.hp/player.maxHp*100)}%`;ui.hpText.textContent=`${Math.ceil(Math.max(0,player.hp))} / ${player.maxHp}${player.shield>0?` + ${Math.ceil(player.shield)}盾`:''}`;ui.energy.style.width=`${player.energy}%`;ui.progress.style.width=`${THREE.MathUtils.clamp((player.body.getPosition().x+7)/(level.length+11)*100,0,100)}%`;const n=aliveEnemies().length;ui.enemyCount.textContent=n?`敌军 ${n}`:'战场已清';ui.combo.querySelector('b').textContent=player.combo;ui.combo.classList.toggle('show',player.combo>1);ui.k.querySelector('i').style.height=`${player.skillCd/Math.max(.1,player.data.skillCd)*100}%`;ui.l.querySelector('i').style.height=`${100-player.energy}%`;if(activeBoss){ui.bossBar.style.width=`${Math.max(0,activeBoss.hp/activeBoss.maxHp*100)}%`;const tell=['windup','attack'].includes(activeBoss.state)?` · ${bossActionLabel(activeBoss)}`:'';ui.bossName.textContent=`BOSS · ${activeBoss.data.name}${tell}`}}
+function updateHUD(){if(!player)return;if(DEV_RUNTIME)root.dataset.qaState=JSON.stringify({state,level:level?.id,length:level?.length,waveIndex,pendingSpawns,x:Number(player.body.getPosition().x.toFixed(2)),y:Number(player.body.getPosition().y.toFixed(2)),facing:player.facing,moveState:player.state,alive:aliveEnemies().length,boss:activeBoss?.data?.name||'',bossState:activeBoss?.state||'',bossPhase:activeBoss?.bossPhase||0,bossAction:activeBoss?bossActionLabel(activeBoss):'',bossX:activeBoss?Number(activeBoss.body.getPosition().x.toFixed(2)):0,bossAt:level?.waves?.at(-1)?.at||0});ui.hp.style.width=`${Math.max(0,player.hp/player.maxHp*100)}%`;ui.hpText.textContent=`${Math.ceil(Math.max(0,player.hp))} / ${player.maxHp}${player.shield>0?` + ${Math.ceil(player.shield)}盾`:''}`;ui.energy.style.width=`${player.energy}%`;ui.progress.style.width=`${THREE.MathUtils.clamp((player.body.getPosition().x+7)/(level.length+11)*100,0,100)}%`;const n=aliveEnemies().length;ui.enemyCount.textContent=`敌 ${n} · 钱 ${levelProgress.coins}/${level.coins} · 简 ${levelProgress.slips}/${level.bambooSlips}`;ui.combo.querySelector('b').textContent=player.combo;ui.combo.classList.toggle('show',player.combo>1);ui.k.querySelector('i').style.height=`${player.skillCd/Math.max(.1,player.data.skillCd)*100}%`;ui.l.querySelector('i').style.height=`${100-player.energy}%`;if(activeBoss){ui.bossBar.style.width=`${Math.max(0,activeBoss.hp/activeBoss.maxHp*100)}%`;const tell=['windup','attack'].includes(activeBoss.state)?` · ${bossActionLabel(activeBoss)}`:'';ui.bossName.textContent=`BOSS · ${activeBoss.data.name}${tell}`}}
 function updateCamera(dt,t){if(!player)return;const px=player.body.getPosition().x,vx=player.body.getLinearVelocity().x,targetLead=Math.abs(vx)>.25?THREE.MathUtils.clamp(vx*.38,-3,3):player.facing*1.15;cameraLead=THREE.MathUtils.lerp(cameraLead,targetLead,1-Math.pow(.015,dt));cameraX=THREE.MathUtils.lerp(cameraX,THREE.MathUtils.clamp(px+cameraLead,-1,level.length-4),1-Math.pow(.0002,dt));const s=shake>0?(Math.random()-.5)*shake:0;camera.position.x=cameraX+s;camera.position.y=4.0+s*.35;shake=Math.max(0,shake-dt*2.8);if(bgMesh)bgMesh.position.x=cameraX*.98;if(cloudField)cloudField.children.forEach(c=>{c.position.x+=c.userData.speed*dt;if(c.position.x-cameraX>18)c.position.x-=65});decorGroup.children.forEach((d,i)=>{if(d.isPoints)d.position.x=cameraX*(.04+i*.025);d.rotation.z=Math.sin(t*.08+i)*.01})}
 
-function fixedUpdate(dt){if(state!=='playing'||hitStop>0)return;updatePlayer(dt);updateEnemies(dt);updateWaves();updateHazard(dt);world.step(dt);updateProjectiles(dt);pressed.clear();if(player?.alive&&waveIndex===level.waves.length&&pendingSpawns===0&&aliveEnemies().length===0&&!entities.some(e=>e.dying&&!e.destroyed)){finish(true)}}
+function fixedUpdate(dt){if(state!=='playing'||hitStop>0)return;updatePlayer(dt);updateEnemies(dt);updateWaves();updateHazard(dt);world.step(dt);processWorldInteractions(dt);updateProjectiles(dt);pressed.clear();if(player?.alive&&waveIndex===level.waves.length&&pendingSpawns===0&&aliveEnemies().length===0&&!entities.some(e=>e.dying&&!e.destroyed)&&levelProgress.monumentActive){finish(true)}}
 function renderLoop(now){const raw=Math.min(.05,(now-lastTime)/1000);lastTime=now;audio.update(raw);const t=now/1000;if(hitStop>0)hitStop=Math.max(0,hitStop-raw);else if(state==='playing'){accumulator+=raw;while(accumulator>=1/60){fixedUpdate(1/60);accumulator-=1/60}updateParticles(raw);animateEntities(t,raw);updateCamera(raw,t);updateHUD()}else{if(cloudField)cloudField.rotation.z=Math.sin(t*.2)*.01;if(bgMesh)bgMesh.position.x=Math.sin(t*.08)*.2;if(relicGroup.visible){relicGroup.rotation.y=t*.42;relicGroup.position.y=2.6+Math.sin(t*1.4)*.18}}composer.render();requestAnimationFrame(renderLoop)}
 
 function toast(text){ui.toast.textContent=text;ui.toast.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>ui.toast.classList.remove('show'),2200)}
 function togglePause(){if(state==='playing'){state='paused';showScreen(ui.pause);audio.setScene('paused')}else if(state==='paused')resume()}
 function resume(){showScreen(null);state='playing';audio.setScene('combat');audio.start('combat');lastTime=performance.now()}
-function finish(win){if(state!=='playing')return;state=win?'levelComplete':'gameOver';root.classList.remove('playing');showScreen(ui.result);audio.setBoss(false);audio.setScene('result');const sec=Math.max(1,Math.round((performance.now()-levelStart)/1000));$('#result-kicker').textContent=win?(levelIndex===9?'十战皆捷 · 天下留名':'敌将已破 · 战旗归阵'):'此战未捷';$('#result-title').textContent=win?(levelIndex===9?'星落五丈原，英名照千秋':'再赴下一场战役'):'整军再战，重返沙场';$('#result-stats').innerHTML=`<div><b>${stats.kills}</b><span>击破</span></div><div><b>${stats.maxCombo}</b><span>最高连击</span></div><div><b>${sec}s</b><span>用时</span></div>`;
-  const bs=$('#blessings');bs.innerHTML='';bs.className='blessings';if(win&&levelIndex<9){[['hp','军医救治','生命 +20'],['attack','破阵军略','攻击 +8%'],['cooldown','疾风号令','冷却 -6%']].forEach(([k,n,d])=>{const b=document.createElement('button');b.className='blessing';b.innerHTML=`<b>${n}</b><small>${d}</small>`;b.onclick=()=>{bs.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');bs.dataset.pick=k};bs.appendChild(b)})}
-  const next=$('#next-level');next.textContent=win?(levelIndex===9?'再战十役':'选择军略，继续征战'):'重试本关';next.onclick=()=>{if(win&&levelIndex<9){const k=bs.dataset.pick||'attack';upgrades[k]++;startLevel(levelIndex+1)}else if(win&&levelIndex===9)showMenu();else startLevel(levelIndex)}
+function finish(win){if(state!=='playing')return;state=win?'levelComplete':'gameOver';root.classList.remove('playing');showScreen(ui.result);audio.setBoss(false);audio.setScene('result');const sec=Math.max(1,Math.round((performance.now()-levelStart)/1000));$('#result-kicker').textContent=win?(levelIndex===2?'三关通灵 · 五行初启':'节气碑已亮 · 灵迹前行'):'此战未捷';$('#result-title').textContent=win?(levelIndex===2?'水木相生，九州灵迹初现':'前往下一处节气'):'整军再战，重返沙场';$('#result-stats').innerHTML=`<div><b>${stats.kills}</b><span>击破</span></div><div><b>${stats.maxCombo}</b><span>最高连击</span></div><div><b>${sec}s</b><span>用时</span></div>`;
+  const bs=$('#blessings');bs.innerHTML='';bs.className='blessings';if(win&&levelIndex<2){[['hp','军医救治','生命 +20'],['attack','破阵军略','攻击 +8%'],['cooldown','疾风号令','冷却 -6%']].forEach(([k,n,d])=>{const b=document.createElement('button');b.className='blessing';b.innerHTML=`<b>${n}</b><small>${d}</small>`;b.onclick=()=>{bs.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');bs.dataset.pick=k};bs.appendChild(b)})}
+  const next=$('#next-level');next.textContent=win?(levelIndex===2?'回到灵迹总览':'进入下一关'):'重试本关';next.onclick=()=>{if(win&&levelIndex<2){const k=bs.dataset.pick||'attack';upgrades[k]++;startLevel(levelIndex+1)}else if(win&&levelIndex===2)showMenu();else startLevel(levelIndex)}
 }
 function showMenu(){relicGroup.visible=false;state='menu';audio.setBoss(false);audio.setScene('menu');root.classList.remove('playing');showScreen(ui.menu);buildBackdrop(LEVELS[0]);}
 
 if(DEV_RUNTIME){
-  globalThis.__SANGUO_DEBUG__={
+  globalThis.__JIUZHOU_DEBUG__={
     snapshot:()=>({
       state, level:level?.id, levelName:level?.name, levelLength:level?.length, waveIndex, pendingSpawns,
       player:player?.body?{x:Number(player.body.getPosition().x.toFixed(2)),y:Number(player.body.getPosition().y.toFixed(2)),hp:player.hp,energy:player.energy,state:player.state,actionPhase:player.actionPhase}:null,
@@ -542,13 +599,46 @@ if(DEV_RUNTIME){
     clearWave:()=>aliveEnemies().forEach(destroyEntity),
     setBossHpRatio:(ratio)=>{if(activeBoss?.alive)activeBoss.hp=activeBoss.maxHp*THREE.MathUtils.clamp(Number(ratio)||0,.01,1);return activeBoss?{hp:activeBoss.hp,phase:activeBoss.bossPhase,state:activeBoss.state}:null},
     setEnergy:(value=100)=>{if(player)player.energy=THREE.MathUtils.clamp(Number(value)||0,0,100);updateHUD();return player?.energy??0},
-    start:async(index,hero='guanyu')=>{selectedHero=HEROES[hero]?hero:'guanyu';await startLevel(THREE.MathUtils.clamp(index,0,LEVELS.length-1));await enterCombat();return globalThis.__SANGUO_DEBUG__.snapshot()},
+    start:async(index,hero='heling')=>{selectedHero=HEROES[hero]?hero:'heling';await startLevel(THREE.MathUtils.clamp(index,0,LEVELS.length-1));await enterCombat();return globalThis.__JIUZHOU_DEBUG__.snapshot()},
     introspect:()=>entities.map(e=>({kind:e.kind,name:e.data?.name,pos:e.body?.getPosition(),scale:{x:e.mesh.scale.x,y:e.mesh.scale.y},cell:[e.mat?.uniforms?.cell?.value?.x,e.mat?.uniforms?.cell?.value?.y],frame:e.mat?.uniforms?.cell?.value?.x+(e.mat?.uniforms?.cell?.value?.y*(e.grid?.[0]||3)),state:e.state,opacity:e.mat?.uniforms?.opacity?.value,scaleXZ:e.data?.scale}))
   };
 }
 
 // Character selection UI
-Object.entries(HEROES).forEach(([id,h])=>{const card=document.createElement('article');card.className='hero-card';card.dataset.id=id;card.style.setProperty('--hero-color',h.color);card.style.setProperty('--img',`url(${new URL(h.atlas,document.baseURI).href})`);card.innerHTML=`<i class="check">✓</i><div class="card-copy"><small>${h.title}</small><h3>${h.name}</h3><p>${h.weapon} · ${h.skill}</p></div>`;card.onclick=()=>{selectedHero=id;relicGroup.clear();relicGroup.add(buildHeroRelic(id));relicGroup.visible=true;document.querySelectorAll('.hero-card').forEach(x=>x.classList.toggle('selected',x===card));ui.detail.textContent=`${h.passive} ｜ 生命 ${h.hp} · 速度 ${h.speed} · 攻击 ${h.attack}`;ui.begin.disabled=false;audio.ui()};ui.cards.appendChild(card)});
+const HERO_BADGES={heling:'节气行者'};
+const HERO_ROLE_DESC={heling:'近战 · 五行辅助'};
+Object.entries(HEROES).forEach(([id,h])=>{
+  const card=document.createElement('article');
+  card.className='hero-card';card.dataset.id=id;
+  card.style.setProperty('--hero-color',h.color);
+  card.style.setProperty('--hero-color-deep',h.accent||h.color);
+  card.style.setProperty('--hero-portrait',`url(${new URL(`assets/portraits/${id}.webp`,document.baseURI).href})`);
+  const badge=HERO_BADGES[id]||'名将';
+  const role=HERO_ROLE_DESC[id]||'近战';
+  card.innerHTML=`
+    <span class="role-badge">${badge}</span>
+    <span class="dim">${role}</span>
+    <i class="check">✓</i>
+    <div class="hero-portrait"></div>
+    <div class="glow"></div>
+    <div class="name-block">
+      <span class="title">${h.title}</span>
+      <h3>${h.name}</h3>
+      <span class="weapon"><b>${h.weapon}</b> · ${h.skill}</span>
+    </div>`;
+  card.onclick=()=>{
+    selectedHero=id;
+    relicGroup.clear();relicGroup.add(buildHeroRelic(id));relicGroup.visible=true;
+    document.querySelectorAll('.hero-card').forEach(x=>x.classList.toggle('selected',x===card));
+    ui.detail.innerHTML=`<i>${h.passive}</i><b>生命 ${h.hp}</b> · <b>速度 ${h.speed}</b> · <b>攻击 ${h.attack}</b> · <b>冷却 ${h.skillCd}s</b>`;
+    ui.detail.dataset.stat=`${role} · 冷却 ${h.skillCd}s`;
+    ui.begin.disabled=false;
+    audio.ui();
+  };
+  ui.cards.appendChild(card);
+});
+// Only one playable hero in the first slice: preselect 禾灵 so the first launch is frictionless.
+ui.cards.querySelector('.hero-card')?.click();
 $('#start-select').onclick=()=>{audio.start('select');audio.setScene('select');showScreen(ui.select);state='select'};ui.begin.onclick=()=>startLevel(0);$('#story-go').onclick=enterCombat;$('#resume').onclick=resume;$('#restart').onclick=()=>startLevel(levelIndex);$('#pause-btn').onclick=togglePause;$('#sound-toggle').onclick=e=>{e.currentTarget.textContent=audio.toggle()?'♫':'×'};
 
 // Touch controls: analog movement plus simultaneous action buttons.
@@ -565,7 +655,7 @@ async function boot(){
     const qa=new URLSearchParams(location.search),requested=Number(qa.get('qa')),bossHp=Number(qa.get('bossHp')),energy=Number(qa.get('energy'));
     if(Number.isFinite(bossHp)&&bossHp>0)debugBossHpRatio=THREE.MathUtils.clamp(bossHp,.01,1);
     if(requested>=1&&requested<=LEVELS.length){
-      selectedHero=HEROES[qa.get('hero')]?qa.get('hero'):'guanyu';
+      selectedHero=HEROES[qa.get('hero')]?qa.get('hero'):'heling';
       await startLevel(requested-1);await enterCombat();
       const skip=Number(qa.get('wave'));
       if(Number.isFinite(skip))waveIndex=THREE.MathUtils.clamp(Math.floor(skip),0,level.waves.length-1);
