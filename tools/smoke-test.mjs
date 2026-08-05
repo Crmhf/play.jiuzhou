@@ -60,6 +60,17 @@ if (fs.statSync('public/assets/audio/sanguo-boss-pressure.mp3').size > 1024 * 10
 
 const heroIds = ['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong'];
 if (JSON.stringify(Object.keys(HEROES)) !== JSON.stringify(heroIds)) throw new Error('hero roster mismatch');
+for (const hero of Object.values(HEROES)) {
+  for (const action of ['attack1','attack2','attack3','skill','ultimate']) {
+    const frames = hero.frames?.[action];
+    if (!Array.isArray(frames) || frames.length < 2 || frames.some(frame => !Number.isInteger(frame) || frame < 0 || frame >= hero.atlasCols * hero.atlasRows)) {
+      throw new Error(`${hero.name} ${action} action frames incomplete`);
+    }
+  }
+  if (!Array.isArray(hero.motion?.attack) || hero.motion.attack.length !== 3 || hero.motion.skill <= 0 || hero.motion.ultimate <= 0) {
+    throw new Error(`${hero.name} motion timing incomplete`);
+  }
+}
 if (MONSTERS.length !== 30) throw new Error('monsters != 30');
 if (new Set(MONSTERS.map(x => x.name)).size !== 30) throw new Error('monster names are not unique');
 if (BOSSES.length !== 10) throw new Error('bosses != 10');
@@ -87,7 +98,7 @@ for (const [index, level] of LEVELS.entries()) {
 }
 
 const html = fs.readFileSync('index.html', 'utf8');
-for (const key of ['WASD', 'SPACE', 'J / K / L', 'mobile-controls']) {
+for (const key of ['WASD', 'SPACE', 'J / K / L', 'mobile-controls', 'combat-callout']) {
   if (!html.includes(key)) throw new Error(`control/UI marker missing: ${key}`);
 }
 const legacy = ['xiyou-battle-theme', '此劫未渡', '沙僧图集'];
