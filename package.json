@@ -11,7 +11,8 @@
     "test": "node tools/smoke-test.mjs",
     "inventory:spine": "node tools/inventory-spine.mjs",
     "assets:help": "node tools/generate-assets.mjs --help",
-    "assets:boss:repack": "python3 tools/repack-boss-atlases.py"
+    "assets:boss:repack": "python3 tools/repack-boss-atlases.py",
+    "assets:audio:import": "python3 tools/import-combat-audio.py \"$SANGUO_AUDIO_PACK\""
   },
   "dependencies": {
     "@vitejs/plugin-basic-ssl": "latest",

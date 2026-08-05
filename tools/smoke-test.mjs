@@ -6,7 +6,24 @@ const required = [
   'src/game.js',
   'src/actors.js',
   'src/levels.js',
+  'src/audio.js',
   'public/assets/audio/sanguo-battle-theme.mp3',
+  'public/assets/audio/sanguo-boss-pressure.mp3',
+  'public/assets/audio/combat/blade-swing-01.mp3',
+  'public/assets/audio/combat/blade-swing-02.mp3',
+  'public/assets/audio/combat/polearm-swing-01.mp3',
+  'public/assets/audio/combat/polearm-swing-02.mp3',
+  'public/assets/audio/combat/bow-release-01.mp3',
+  'public/assets/audio/combat/bow-release-02.mp3',
+  'public/assets/audio/combat/hit-body-01.mp3',
+  'public/assets/audio/combat/hit-body-02.mp3',
+  'public/assets/audio/combat/hit-armor-01.mp3',
+  'public/assets/audio/combat/hit-armor-02.mp3',
+  'public/assets/audio/combat/hit-heavy-01.mp3',
+  'public/assets/audio/combat/hit-heavy-02.mp3',
+  'public/assets/audio/combat/skill-wind-01.mp3',
+  'public/assets/audio/combat/skill-impact-01.mp3',
+  'public/assets/audio/combat/ultimate-blade-01.mp3',
   ...Array.from({ length: 10 }, (_, i) => `public/assets/backgrounds/level-${String(i + 1).padStart(2, '0')}.webp`),
   ...['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong'].map(id => `public/assets/characters/${id}/atlas.webp`),
   ...['01-chengyuanzhi','02-huaxiong','03-lvbu','04-xiahoudun','05-caoren','06-xuchu','07-ganning','08-xiahouyuan','09-luxun','10-simayi'].flatMap(id => [
@@ -25,6 +42,22 @@ for (const file of required) {
 
 const { HEROES, MONSTERS, BOSSES } = await import('../src/actors.js');
 const { LEVELS } = await import('../src/levels.js');
+const { COMBAT_AUDIO } = await import('../src/audio.js');
+
+const expectedCombatAudio = 15;
+const combatAudioFiles = Object.values(COMBAT_AUDIO).flat();
+if (combatAudioFiles.length !== expectedCombatAudio || new Set(combatAudioFiles).size !== expectedCombatAudio) {
+  throw new Error('combat audio manifest mismatch');
+}
+for (const file of combatAudioFiles) {
+  const asset = `public/assets/audio/combat/${file}`;
+  if (!required.includes(asset)) throw new Error(`combat audio not smoke-tested: ${file}`);
+  if (fs.statSync(asset).size > 100 * 1024) throw new Error(`combat audio too large: ${file}`);
+}
+if (fs.statSync('public/assets/audio/sanguo-boss-pressure.mp3').size > 1024 * 1024) {
+  throw new Error('boss pressure loop exceeds 1 MiB budget');
+}
+
 const heroIds = ['guanyu', 'zhangfei', 'zhaoyun', 'huangzhong'];
 if (JSON.stringify(Object.keys(HEROES)) !== JSON.stringify(heroIds)) throw new Error('hero roster mismatch');
 if (MONSTERS.length !== 30) throw new Error('monsters != 30');
@@ -66,4 +99,4 @@ for (const file of textFiles) {
 
 if (bad) process.exit(1);
 const assetBytes = required.filter(x => x.startsWith('public/')).reduce((sum, file) => sum + fs.statSync(file).size, 0);
-console.log(`Smoke checks passed: 4 heroes, 30 monsters, 10 bosses, 10 levels; required assets ${(assetBytes / 1024 / 1024).toFixed(2)} MiB.`);
+console.log(`Smoke checks passed: 4 heroes, 30 monsters, 10 bosses, 10 levels, 15 combat samples; required assets ${(assetBytes / 1024 / 1024).toFixed(2)} MiB.`);

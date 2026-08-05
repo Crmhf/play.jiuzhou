@@ -106,7 +106,7 @@ AI 状态机：`巡逻 → 发现 → 追击 → 攻击 → 受击 → 硬直/�
 | 动画 | 4×3 Multi-frame Sprite Atlas + Spine Bridge | 十名 Boss 独立动作帧；保留兼容 Spine 骨骼动画的视觉适配层 |
 | 关卡 | 类 Tiled JSON 数据 | 地形、刷怪、机关、Boss 波次数据驱动 |
 | 后期 | EffectComposer | Bloom、FXAA、色调分级、条件残影、暗角 |
-| 音频 | MiniMax + WebAudio | 三国战斗 BGM；命中、斩击、技能、UI 音效实时合成 |
+| 音频 | MiniMax + WebAudio | 三国战斗 BGM + Boss 战鼓压力层；15 个低延迟刀剑/枪棍/弓弩/护甲/重击采样与程序化音色分层 |
 
 ### Three.js 的使用价值
 
@@ -167,7 +167,8 @@ AI 原画不是直接被误称为“3D 模型”。项目使用 img2threejs 的�
 - 补充背景与 UI：`Qwen/Qwen-image`
 - 角色、小怪、Boss 图集：MiniMax `image-01`
 - 背景音乐：MiniMax `music-2.6`
-- 音效：WebAudio 程序化合成，避免加载大量短音频
+- 音效：从用户提供的 1700 款武器打斗素材中精选 15 个短采样，经静音裁切、动态压缩、限幅与 96 kbps MP3 转码；WebAudio 解码后按武器、目标护甲和攻击强度随机分层
+- Boss 音乐压力层：以重兵器、金属碰撞和剑气采样重构 40.5 秒战鼓层，仅在 Boss 战淡入，并对主 BGM 做受击瞬态闪避（ducking）
 
 密钥只通过环境变量读取，不进入 Git：
 
@@ -175,6 +176,9 @@ AI 原画不是直接被误称为“3D 模型”。项目使用 img2threejs 的�
 MINIMAX_API_KEY=... node tools/generate-assets.mjs minimax-boss-animation
 python3 -m pip install -r tools/requirements-assets.txt
 npm run assets:boss:repack
+
+# 用户本地音频包，不进入 Git；ffmpeg/ffprobe 必须可用
+SANGUO_AUDIO_PACK='/absolute/path/to/1700款音频素材...' npm run assets:audio:import
 ```
 
 ## 11. 目录结构
@@ -182,7 +186,8 @@ npm run assets:boss:repack
 ```text
 play.sanguo/
 ├── public/assets/
-│   ├── audio/
+│   ├── audio/{sanguo-battle-theme,sanguo-boss-pressure}.mp3
+│   │   └── combat/              # 15 个 WebAudio 战斗短采样
 │   ├── backgrounds/level-01.webp ... level-10.webp
 │   ├── characters/{guanyu,zhangfei,zhaoyun,huangzhong}/
 │   ├── monsters/group-{1,2,3}/
@@ -194,7 +199,8 @@ play.sanguo/
 ├── src/
 │   ├── actors.js             # 4 武将、30 小怪、10 Boss
 │   ├── levels.js             # 10 关故事、平台、波次与机关
-│   ├── game.js               # 游戏循环、物理、战斗、输入、音频
+│   ├── game.js               # 游戏循环、物理、战斗、输入
+│   ├── audio.js              # 自适应 BGM、采样播放与程序化音效
 │   ├── postfx.js             # 色调与后期
 │   ├── relics.js             # img2threejs 风格武器重建
 │   ├── seal-gate.js          # 程序化虎符传送门
@@ -205,6 +211,7 @@ play.sanguo/
 │   ├── inventory-spine.mjs
 │   ├── repack-boss-atlases.py # 绿幕图集严格 4×3 重排
 │   ├── requirements-assets.txt
+│   ├── import-combat-audio.py # 精选音效转码与 Boss 压力层构建
 │   └── smoke-test.mjs
 ├── ITERATIONS.md             # 十轮迭代记录
 └── README.md
