@@ -12,7 +12,7 @@ export const HEROES = {
     hp: 150, speed: 7.4, accel: 42, brake: 58, jump: 12.2, attack: 23, skillCd: 4.8,
     ultimate: '春木·万物生', skill: '水灵·润泽', passive: '铜钱与竹简会为灵珠蓄力；空中可再次起跳',
     weapon: '稷镰', atlasCols: 4, atlasRows: 3, artFacing: 1,
-    frames: { idle: 6, walk: [1, 3], run: [0, 3], jump: 0, attack: [3, 4], attack1: [3, 4, 3], attack2: [4, 3, 4], attack3: [3, 4, 5, 4, 3], skill: [5, 4, 5], ultimate: [5, 4, 5, 3, 5], hurt: 8 },
+    frames: { idle: 0, walk: [1, 1], run: [2, 2], jump: 3, attack: [4, 4], attack1: [4, 4], attack2: [5, 5], attack3: [6, 6], skill: [7, 7], ultimate: [8, 8], hurt: 9, dash: 10, victory: 11 },
     motion: { attack: [.18, .22, .34], skill: .78, ultimate: 1.25 }
   }
 };

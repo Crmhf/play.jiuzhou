@@ -10,10 +10,11 @@ const required = [
   'public/assets/audio/combat/hit-heavy-01.mp3', 'public/assets/audio/combat/hit-heavy-02.mp3',
   'public/assets/audio/combat/skill-wind-01.mp3', 'public/assets/audio/combat/skill-impact-01.mp3',
   'public/assets/audio/combat/ultimate-blade-01.mp3',
-  'public/assets/characters/guanyu/atlas.webp', 'public/assets/bosses/group-2/atlas.webp',
+  'public/assets/characters/heling/atlas.webp', 'public/assets/characters/heling/manifest.json', 'public/assets/characters/guanyu/atlas.webp', 'public/assets/bosses/group-2/atlas.webp',
   'public/assets/portraits/heling.webp', 'public/assets/ui/portrait-frame.webp',
   'public/assets/ui/select-banner.webp', 'public/assets/ui/story-frame.webp',
   'public/assets/backgrounds/jiuzhou-spring-village.webp', 'public/assets/backgrounds/jiuzhou-thunder-bamboo.webp', 'public/assets/backgrounds/jiuzhou-water-town.webp',
+  'tools/repack-heling-atlas.py',
 ];
 let bad = 0;
 for (const file of required) {

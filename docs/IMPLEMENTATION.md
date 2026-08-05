@@ -30,6 +30,7 @@
 ## 资源与音频策略
 
 - 复杂关卡背景：使用 `gpt-image-2` 生成，再放入 `public/assets/backgrounds/jiuzhou-*.webp`。
+- 主角图集：`gpt-image-2` 生成原始十二格图集后，由 `tools/repack-heling-atlas.py` 按内容边界裁剪并重排为 1024×768 严格 4×3，避免生成模型偶发多行/留白导致运行时精灵错位。
 - 简单 UI/肖像补充：使用 MiniMax `image-01` 与 Qwen Image 生成，密钥只通过 `.env.local` 读取，绝不写入客户端 bundle。
 - 音乐：使用 MiniMax `music-2.6` 生成 `jiuzhou-theme.mp3` 与 `jiuzhou-boss.mp3`。
 - 出招音效：复用本地古风打斗素材包，经 `tools/import-combat-audio.py` 做裁切、限幅和 MP3 转码；`src/audio.js` 按普攻、技能、Boss、受击分层播放，并保留程序化兜底音效。

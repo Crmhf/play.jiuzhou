@@ -255,6 +255,19 @@ function aliveEnemies(){return entities.filter(e=>e.alive&&e.kind!=='player')}
 const HERO_COMBAT_CALLS={
   heling:{skill:['水灵·润泽 · 清泉回春','水行其道，火焰退散'],ultimate:['春木·万物生','五行初醒，灵迹归位']}
 };
+function showCombatCallout(type,title,subtitle,accent='#f7c85c'){
+  if(!ui.callout)return;const [small,strong,span]=ui.callout.children;
+  small.textContent=type==='ultimate'?'ULTIMATE · 节气终章':type==='skill'?'SKILL · 五行灵诀':'COMBO · 稷镰连击';strong.textContent=title;span.textContent=subtitle;ui.callout.style.setProperty('--callout-accent',accent);ui.callout.dataset.type=type;ui.callout.classList.remove('show');void ui.callout.offsetWidth;ui.callout.classList.add('show');clearTimeout(showCombatCallout.timer);showCombatCallout.timer=setTimeout(()=>ui.callout.classList.remove('show'),type==='ultimate'?1900:1200);
+}
+function beginPlayerAction(kind,duration,phase=kind){
+  player.state=kind;player.stateTime=0;player.actionPhase=phase;player.actionDuration=duration;player.actionSerial++;player.actionTrailTimer=0;player.actionImpactDone=false;return player.actionSerial;
+}
+function heroAfterimage(e,opacity=.2){
+  if(!canUseMotionBlur&&innerWidth<800)return;const mat=e.mat.clone();mat.uniforms.opacity.value=opacity;mat.uniforms.flash.value=.08;const ghost=new THREE.Mesh(e.mesh.geometry,mat);ghost.position.copy(e.mesh.position);ghost.rotation.copy(e.mesh.rotation);ghost.scale.copy(e.mesh.scale);ghost.renderOrder=2;fxGroup.add(ghost);particles.push({mesh:ghost,vx:-e.facing*.35,vy:.05,life:.16,max:.16,heroGhost:true});
+}
+function impactFx(x,y,color,dir=1,strength=1){
+  const s=Math.min(2.2,strength);ringFx(x,y,color,.55*s,.24);slashFx(x+dir*.12,y+.18,color,dir,.62*s);burst(x+dir*.22,y,color,Math.round(10+8*s),4.5+2*s);
+}
 function damage(target,amount,source,force=5){
   if(!target?.alive||target.dying||target.invuln>0)return false;
   if(target.kind==='player'&&target.shield>0){const used=Math.min(target.shield,amount*.65);target.shield-=used;amount-=used}
@@ -276,6 +289,7 @@ function kill(target,source){
 function hitArea(x,y,range,amount,force=7,filter=()=>true){
   let hits=0;entities.forEach(e=>{if(e.alive&&e.kind!=='player'&&filter(e)){const p=e.body.getPosition(),dx=p.x-x,dy=p.y-y;if(Math.abs(dx)<range&&Math.abs(dy)<range*.75){if(damage(e,amount,player,force))hits++}}});return hits;
 }
+function actionFrames(frames,phase){const value=frames?.[phase];return Array.isArray(value)?value:[value??frames?.attack??frames?.idle??0]}
 function attack(){
   if(player.attackCd>0||!player.alive)return;
   player.attackStep=(player.attackStep%3)+1;

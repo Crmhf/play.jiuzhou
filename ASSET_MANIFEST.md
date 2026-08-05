@@ -7,6 +7,7 @@
 | 分类 | 文件 | 模型 / 来源 | 状态与用途 |
 |---|---|---|---|
 | 十关复杂背景 | `public/assets/backgrounds/level-01.webp` … `level-10.webp` | `gpt-image-2`，复杂国风横版场景提示词 | 虎牢关样片已成功；其余按关卡故事重新生成并覆盖旧占位图 |
+| 主角动作图集 | `public/assets/characters/heling/atlas.webp` | `gpt-image-2` + `tools/repack-heling-atlas.py` | 1536×1024 原始图集按内容边界裁剪重排为 1024×768 严格 4×3；禾灵不再回退到旧武将素材 |
 | 四武将动作图集 | `public/assets/characters/*/atlas.webp` | MiniMax `image-01` | 3×3 动作布局，关羽/张飞/赵云/黄忠，运行时自适应色键抠图 |
 | 30 种敌军图集 | `public/assets/monsters/group-*` | MiniMax `image-01` | 三组 4×3 图集，数据层映射 30 种敌军 |
 | 10 Boss 动作图集 | `public/assets/bosses/animated/*/atlas.webp` | MiniMax `image-01` + `tools/repack-boss-atlases.py` | 每名 Boss 独立 4×3 多帧图集；离线绿幕重排消除跨格武器、重复姿势和生成模型偶发 4 行/5 列排版 |
@@ -25,7 +26,7 @@
 - MiniMax `image-01`：可用，已生成武将、敌军、Boss 和 UI 图集。
 - MiniMax `music-2.6`：用于生成纯音乐战斗主题。
 - `Qwen/Qwen-image`：2026-08-04 调用返回 `model_not_found` / 502，未虚构产物；保留 `tools/generate-assets.mjs qwen-ui` 作为通道恢复后的可选补充。
-- `deepseek-ai/DeepSeek-OCR`：用于联系表文字识别试验；当前兼容接口返回内容不足，正式角色 ID 以文件库存、预览图人工复核和 Spine 包动画名为准。
+- `deepseek-ai/DeepSeek-OCR`：按用户配置的 `http://cf.douzimi.com:58728/v1` 调用过精灵图和游戏截图识别；该通道对复杂游戏画面返回不稳定，正式排版验证以程序化网格/像素检查和浏览器烟测为准。
 
 ## 可复现生成
 
@@ -39,6 +40,7 @@ node tools/generate-assets.mjs minimax-boss-animation
 npm run assets:boss:repack
 node tools/generate-assets.mjs minimax-music
 SANGUO_AUDIO_PACK='/absolute/path/to/1700款音频素材...' npm run assets:audio:import
+npm run assets:heling:repack
 ```
 
 Boss 生成后需执行本地重排与视觉 QA；原始生成图备份在 Git 忽略的 `.gen/raw-boss-atlases/`。生成器只读取环境变量，响应摘要写入被 Git 忽略的 `.gen/`。不要把长期密钥放到前端 JavaScript、README、提交历史或服务器静态目录。

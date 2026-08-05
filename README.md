@@ -32,7 +32,7 @@
 - **Three.js**：正交镜头、背景分层、图集角色、粒子、残影、冲击环、Bloom、色调后期。
 - **Planck.js**：重力、平台、角色碰撞和简单物理反馈。
 - **数据驱动关卡**：`src/levels.js` 集中管理节气、长度、平台、波次、收集物、陷阱和 Boss 节点。
-- **资源生成**：背景、UI 和音乐均可通过本地生成脚本接入用户提供的图片/音乐 API；密钥只从 `.env.local` 读取。
+- **资源生成**：背景、UI 和音乐均可通过本地生成脚本接入用户提供的图片/音乐 API；禾灵图集由 `gpt-image-2` 生成并经 `tools/repack-heling-atlas.py` 重排为严格 4×3；密钥只从 `.env.local` 读取。
 
 详细设计与实现映射见 [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md)。
 

@@ -11,6 +11,7 @@
     "test": "node tools/smoke-test.mjs",
     "inventory:spine": "node tools/inventory-spine.mjs",
     "assets:help": "node tools/generate-assets.mjs --help",
+    "assets:heling:repack": "python3 tools/repack-heling-atlas.py",
     "assets:boss:repack": "python3 tools/repack-boss-atlases.py",
     "assets:audio:import": "python3 tools/import-combat-audio.py \"$JIUZHOU_AUDIO_PACK\""
   },
