@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "id": "luxun",
+  "cols": 4,
+  "rows": 3,
+  "artFacing": 1,
+  "fps": 8,
+  "frames": {
+    "idle": [
+      0
+    ],
+    "move": [
+      1,
+      2,
+      3
+    ],
+    "intro": [
+      0,
+      4
+    ],
+    "windup": [
+      4
+    ],
+    "attack0": [
+      5,
+      6
+    ],
+    "attack1": [
+      4,
+      6,
+      7
+    ],
+    "attack2": [
+      8,
+      9
+    ],
+    "recover": [
+      6,
+      0
+    ],
+    "hurt": [
+      9
+    ],
+    "phase": [
+      4,
+      8
+    ],
+    "death": [
+      10,
+      11
+    ]
+  },
+  "repacked": true,
+  "transparent": false
+}

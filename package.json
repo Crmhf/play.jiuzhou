@@ -1,0 +1,24 @@
+{
+  "name": "play-sanguo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "三国大乱斗：Three.js + Planck.js 十关横版动作清关游戏",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node tools/smoke-test.mjs",
+    "inventory:spine": "node tools/inventory-spine.mjs",
+    "assets:help": "node tools/generate-assets.mjs --help",
+    "assets:boss:repack": "python3 tools/repack-boss-atlases.py"
+  },
+  "dependencies": {
+    "@vitejs/plugin-basic-ssl": "latest",
+    "planck": "1.4.2",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "vite": "7.1.1"
+  }
+}

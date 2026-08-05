@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#090716" />
+  <meta name="description" content="三国大乱斗：十战定乾坤——Three.js + Planck.js 国风横版动作清关游戏" />
+  <title>三国大乱斗 · 十战定乾坤</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%23080910%22/><text x=%2232%22 y=%2247%22 text-anchor=%22middle%22 font-size=%2244%22 fill=%22%23f7c85c%22>战</text></svg>">
+  <link rel="preload" href="/assets/audio/sanguo-battle-theme.mp3" as="audio" />
+</head>
+<body>
+  <div id="game-root">
+    <div id="webgl"></div><div id="vignette"></div><div id="flash"></div>
+    <section id="loading" class="screen active"><div class="seal">战</div><h1>三国大乱斗</h1><p>正在擂鼓聚将…</p><div class="loader"><i></i></div></section>
+    <section id="menu" class="screen">
+      <div class="menu-copy"><span class="eyebrow">三国群英 · 横版清关</span><h1>三国<br><b>大乱斗</b></h1><p>十战定乾坤 · 群雄再起</p></div>
+      <button id="start-select" class="gold-btn">点将出征 <span>→</span></button>
+      <div class="controls-hint"><span>WASD 移动</span><span>SPACE 跳跃</span><span>J / K / L 出招</span></div>
+      <button id="sound-toggle" class="icon-btn" aria-label="声音">♫</button>
+    </section>
+    <section id="select" class="screen panel-screen">
+      <header><span class="eyebrow">选择你的出战武将</span><h2>四将并肩，各展绝学</h2></header>
+      <div id="hero-cards" class="hero-cards"></div><div id="hero-detail"></div><button id="begin" class="gold-btn" disabled>进入第一战</button>
+    </section>
+    <section id="story" class="screen panel-screen"><div class="story-card"><span id="story-kicker"></span><h2 id="story-title"></h2><p id="story-objective"></p><blockquote id="story-quote"></blockquote><button id="story-go" class="gold-btn">迎战</button></div></section>
+    <section id="hud">
+      <div class="hud-top">
+        <div class="portrait"><span id="hud-avatar">关</span></div>
+        <div class="vitals"><div class="name-row"><strong id="hud-name">关羽</strong><span id="level-name"></span></div><div class="bar hp"><i id="hp-bar"></i><b id="hp-text"></b></div><div class="bar energy"><i id="energy-bar"></i><b>战意</b></div></div>
+        <div class="level-progress"><span id="level-no">第一战</span><div><i id="progress-bar"></i></div><b id="enemy-count">敌军 0</b></div>
+      </div>
+      <div id="boss-hud"><span id="boss-name"></span><div><i id="boss-bar"></i></div></div><div id="combo"><b>0</b><span>COMBO</span></div><div id="toast"></div>
+      <div id="skill-dock"><div><kbd>J</kbd><span>连击</span></div><div id="skill-k"><kbd>K</kbd><span>技能</span><i></i></div><div id="skill-l"><kbd>L</kbd><span>绝技</span><i></i></div></div>
+    </section>
+    <section id="pause" class="screen panel-screen"><div class="dialog"><span class="eyebrow">鸣金暂歇，整顿军阵</span><h2>游戏暂停</h2><button id="resume" class="gold-btn">继续征战</button><button id="restart" class="text-btn">重开本关</button></div></section>
+    <section id="result" class="screen panel-screen"><div class="dialog"><span id="result-kicker" class="eyebrow"></span><h2 id="result-title"></h2><div id="result-stats"></div><div id="blessings"></div><button id="next-level" class="gold-btn">继续征战</button></div></section>
+    <div id="mobile-controls"><div id="joystick"><i></i></div><div class="mobile-actions"><button data-key="jump">跃</button><button data-key="attack">J</button><button data-key="skill">K</button><button data-key="ultimate" class="ultimate">L</button><button data-key="dash" class="dash">闪</button></div></div>
+    <button id="pause-btn" aria-label="暂停">Ⅱ</button>
+  </div>
+  <script type="module" src="/src/game.js"></script>
+</body>
+</html>
