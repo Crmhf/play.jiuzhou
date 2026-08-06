@@ -245,7 +245,7 @@ async function spawnWave(wave){
   pendingSpawns++;
   try{
     if(wave.boss!==undefined){const d=BOSSES[wave.boss],m=level.enemyScale;await spawnBoss({...d,hp:Math.round(d.hp*m.hp),attack:Number((d.attack*m.attack).toFixed(1)),speed:d.speed*m.speed},wave.at+5);return}
-    const m=level.enemyScale;await Promise.all(wave.enemies.map((id,i)=>{const d=MONSTERS[id];return makeActor('enemy',{...d,hp:Math.round(d.hp*m.hp),attack:Number((d.attack*m.attack).toFixed(1)),speed:d.speed*m.speed},wave.at+6+i*1.7+(i%2)*1.2,.8+Math.random()*1.8)}));
+    const m=level.enemyScale;await Promise.all(wave.enemies.map((id,i)=>{const d=MONSTERS[id];return makeActor('enemy',{...d,hp:Math.round(d.hp*m.hp),attack:Number((d.attack*m.attack).toFixed(1)),speed:d.speed*m.speed},wave.at+6+i*1.7+(i%2)*1.2,.45+Math.random()*.5)}));
     toast(`${wave.title || '敌阵来袭'} · ${wave.enemies.length} 名敌军`);audio.skill();
   }finally{pendingSpawns=Math.max(0,pendingSpawns-1)}
 }
@@ -311,7 +311,7 @@ function kill(target,source){
   target.body.setLinearVelocity(planck.Vec2(0,target.kind==='boss'?2.1:1));for(let f=target.body.getFixtureList();f;f=f.getNext())f.setSensor(true);if(target.kind==='boss')audio.setBoss(false);audio.bossImpact();setTimeout(()=>destroyEntity(target),target.deathDuration*1000);
 }
 function hitArea(x,y,range,amount,force=7,filter=()=>true){
-  let hits=0;entities.forEach(e=>{if(e.alive&&e.kind!=='player'&&filter(e)){const p=e.body.getPosition(),dx=p.x-x,dy=p.y-y;if(Math.abs(dx)<range&&Math.abs(dy)<range*.75){if(damage(e,amount,player,force))hits++}}});return hits;
+  let hits=0;entities.forEach(e=>{if(e.alive&&e.kind!=='player'&&filter(e)){const p=e.body.getPosition(),dx=p.x-x,dy=p.y-y;if(Math.abs(dx)<range&&Math.abs(dy)<Math.max(2.6,range*1.05)){if(damage(e,amount,player,force))hits++}}});return hits;
 }
 function actionFrames(frames,phase){const value=frames?.[phase];return Array.isArray(value)?value:[value??frames?.attack??frames?.idle??0]}
 function attack(){
@@ -333,7 +333,7 @@ function attack(){
       if(step===3){hitStop=.08;shake=.72}
       return;
     }
-    const range=step===3?3.1:2.25,hits=hitArea(q.x+player.facing*1.2,q.y,range,power,step===3?15:7.5);
+    const range=step===3?3.5:2.7,hits=hitArea(q.x+player.facing*1.2,q.y,range,power,step===3?15:7.5);
     slashFx(q.x+player.facing*1.3,q.y+.25,player.data.color,player.facing,step===3?1.5:1);if(hits){hitStop=Math.max(hitStop,step===3?.1:.055);shake=Math.min(1.4,shake+(step===3?.42:.18));}else audio.tone(180,.06,'sawtooth',.03,2);
   },activeAt*1000);
 }
@@ -508,14 +508,16 @@ function updateEnemies(dt){
   const living=aliveEnemies().filter(e=>!e.dying);let attacking=living.filter(e=>e.activeAttack).length;
   living.forEach(e=>{e.invuln=Math.max(0,e.invuln-dt);e.attackCd=Math.max(0,e.attackCd-dt);e.stateTime+=dt;const p=e.body.getPosition(),pp=player.body.getPosition(),dx=pp.x-p.x,dist=Math.abs(dx),boss=e.kind==='boss';if(!boss||!['windup','attack'].includes(e.state))e.facing=Math.sign(dx)||-1;
     if(e.frozen>0){e.frozen-=dt;e.state='idle';e.stateTime=0;e.activeAttack=false;const fv=e.body.getLinearVelocity();e.body.setLinearVelocity(planck.Vec2(fv.x*.8,Math.max(fv.y,-6)));if(e.frozen<=0){e.mat.uniforms.tint.value.set(e.data.color||0xffffff);e.mat.uniforms.emission.value=0}return}
+    if(p.y<-9){damage(e,9999,null);return}
+    if(!boss&&(dist>13||Math.abs(pp.y-p.y)>6)){const nx=pp.x-Math.sign(dx||1)*7.5;e.body.setTransform(planck.Vec2(nx,Math.max(.45,pp.y)),0);ringFx(nx,Math.max(.45,pp.y),e.data.color||'#fff',1.2,.3)}
     if(e.state==='hurt'&&e.stateTime<.22)return;if(e.state==='hurt'){e.state='idle';e.stateTime=0;e.activeAttack=false}
     if(boss&&updateBossAction(e,dt,p,pp))return;
-    const ideal=e.data.ranged?5.2:(boss?3.15:1.6);let targetV=0;
+    const ideal=e.data.ranged?4.4:(boss?3.15:1.6);let targetV=0;
     if(e.state==='attack'){/* attack animation still in progress: small forward lunge */
       targetV=e.facing*(e.data.heavy?4.2:2.4);
     }else if(dist>ideal){
       targetV=Math.sign(dx)*e.data.speed*(boss?1+.08*e.bossPhase:1);
-    }else if(e.data.ranged&&dist<3.5){
+    }else if(e.data.ranged&&dist<3){
       targetV=-Math.sign(dx)*e.data.speed*.8;
     }else if(!e.data.ranged){
       // close the gap lightly so melee enemies keep pressuring the player
@@ -567,7 +569,7 @@ function updateHazard(dt){
   }
 }
 
-function updateWaves(){if(waveIndex>=level.waves.length)return;const wave=level.waves[waveIndex],p=player.body.getPosition(),living=aliveEnemies();if(p.x>=wave.at&&living.length===0&&pendingSpawns===0){spawnWave(wave);waveIndex++}if((living.length||pendingSpawns>0)&&waveIndex>0){const gate=level.waves[waveIndex-1].at+8;if(p.x>gate)player.body.setTransform(planck.Vec2(gate,p.y),0)}}
+function updateWaves(){if(waveIndex>=level.waves.length)return;const wave=level.waves[waveIndex],p=player.body.getPosition(),living=aliveEnemies();if(p.x>=wave.at&&living.length===0&&pendingSpawns===0){spawnWave(wave);waveIndex++}if((living.length||pendingSpawns>0)&&waveIndex>0){const gate=level.waves[waveIndex-1].at+12;if(p.x>gate)player.body.setTransform(planck.Vec2(gate,p.y),0)}}
 
 function spawnProjectile(x,y,color,vx,vy,damageAmount,owner,shape='orb'){
   const geometry=shape==='arrow'?new THREE.ConeGeometry(.11,.75,5):new THREE.SphereGeometry(.16,8,8);

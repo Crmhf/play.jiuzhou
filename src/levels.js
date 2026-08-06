@@ -4,9 +4,9 @@
  * 让后续扩充二十四节气时只需增加数据而不必重写渲染和物理。
  */
 const terrainProfiles = {
-  village: { step: 13, types: ['taoyuan', 'field', 'bridge'], fn: (j) => ({ y: .42 + Math.sin(j * 1.35) * .34, w: 5.8 + (j % 3) * .6 }) },
-  bamboo: { step: 10.6, types: ['bamboo', 'stone', 'vine-platform'], fn: (j) => ({ y: .48 + [0, .85, 1.65, .8][j % 4], w: 4.0 + (j % 3) * .55 }) },
-  water: { step: 9.8, types: ['wood-bridge', 'water-platform', 'stone-bridge'], fn: (j) => ({ y: .45 + [0, 1.2, .35, 1.85, .7][j % 5], w: 4.2 + (j % 2) * 1.1 }) }
+  village: { step: 13, types: ['taoyuan', 'field', 'bridge'], fn: (j) => ({ y: 1.9 + Math.sin(j * 1.35) * .45 + (j % 3) * .35, w: 5.8 + (j % 3) * .6 }) },
+  bamboo: { step: 10.6, types: ['bamboo', 'stone', 'vine-platform'], fn: (j) => ({ y: [1.6, 2.2, 2.9, 1.9][j % 4], w: 4.0 + (j % 3) * .55 }) },
+  water: { step: 9.8, types: ['wood-bridge', 'water-platform', 'stone-bridge'], fn: (j) => ({ y: [1.5, 2.2, 1.75, 2.8, 2.0][j % 5], w: 4.2 + (j % 2) * 1.1 }) }
 };
 
 function buildPlatforms(length, terrain) {

@@ -97,8 +97,8 @@ export class AudioEngine {
     const musicTarget = Math.max(0, Math.min(1, base * (1 - this.duck * .32)));
     const pressureTarget = Math.max(0, Math.min(1, this.enabled && this.scene === 'combat' && this.bossActive ? .19 : 0));
     const blend = 1 - Math.exp(-dt * (pressureTarget > this.pressure.volume ? 3.8 : 5.8));
-    this.music.volume += (musicTarget - this.music.volume) * blend;
-    this.pressure.volume += (pressureTarget - this.pressure.volume) * blend;
+    this.music.volume = Math.max(0, Math.min(1, this.music.volume + (musicTarget - this.music.volume) * blend));
+    this.pressure.volume = Math.max(0, Math.min(1, this.pressure.volume + (pressureTarget - this.pressure.volume) * blend));
   }
 
   sample(group, { volume = .35, rate = 1, rateJitter = .035, pan = 0, delay = 0, minGap = 28 } = {}) {
